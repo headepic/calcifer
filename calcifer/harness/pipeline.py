@@ -2,8 +2,8 @@
 
 Pattern from "Harness Design for Long-Running Application Development":
 - Planner expands a short spec into a full product plan
-- Generator builds one feature at a time with self-testing
-- Evaluator grades against criteria and catches bugs the generator missed
+- Generator builds features with self-testing
+- Evaluator grades against criteria and catches missed bugs
 
 Key insight: "Tuning a standalone evaluator to be skeptical turns out to
 be far more tractable than making a generator critical of its own work."
@@ -14,21 +14,22 @@ Each agent gets a full context reset with only the structured artifacts.
 
 from __future__ import annotations
 
-import json
+import dataclasses
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
+from typing import Any, Callable
 
 from ..agent import Agent, AgentResult
 from ..config import CalciferConfig
 from ..tool import Tool
-from .artifacts import EvalResult, FeatureList, ProgressLog, SprintContract
+from ..types.message import StreamEvent
+from .artifacts import EvalResult, FeatureList, ProgressLog
 
 logger = logging.getLogger(__name__)
 
-# Default grading criteria (from the article)
+OnEventFn = Callable[[str, StreamEvent], None] | None  # (phase, event) callback
+
 DEFAULT_CRITERIA = {
     "functionality": "Can users complete tasks without errors? Do all features work?",
     "code_quality": "Clean architecture, no dead code, proper error handling?",
@@ -41,19 +42,18 @@ You are a product planner. Take this specification and expand it into a
 comprehensive product plan.
 
 **Your job:**
-1. Expand the 1-4 sentence spec into detailed feature descriptions
+1. Expand the spec into detailed feature descriptions
 2. Identify technical architecture decisions
-3. Create a prioritized feature list as JSON (feature_list.json)
-4. Write the plan to `plan.md`
+3. Create a prioritized feature list as JSON (`{feature_list}`)
+4. Write the plan to `{plan_file}`
 
 **Guidelines:**
-- Be ambitious on scope — AI makes marginal cost near zero
-- Identify AI integration opportunities
+- Be ambitious on scope
 - Order features by dependency (foundations first)
 - Each feature needs concrete verification steps
-- Stay focused on WHAT to build, not HOW (let the generator decide)
+- Stay focused on WHAT to build, not HOW (let the builder decide)
 
-**Output format for feature_list.json:**
+**Output format for `{feature_list}`:**
 JSON array of objects: {{"category", "description", "steps", "passes": false, "priority"}}
 
 Specification:
@@ -61,44 +61,41 @@ Specification:
 """
 
 GENERATOR_PROMPT = """\
-You are a coding agent. Build the next feature from the feature list.
+You are a coding agent. Build the next features from the feature list.
 
 **Session startup:**
-1. Read `plan.md` for the product vision.
-2. Read `feature_list.json` and pick the highest-priority unfinished feature.
-3. Read `claude-progress.txt` for context on prior work.
+1. Read `{plan_file}` for the product vision.
+2. Read `{feature_list}` and pick the highest-priority unfinished features.
+3. Read `{progress_file}` for context on prior work.
 4. Read recent git log: `git log --oneline -20`
-5. Start the dev server if `init.sh` exists.
+5. Start the dev server if an init script exists.
 
 **During development:**
-- Implement ONE feature completely.
+- Build and test features.
 - Self-test before declaring done.
 - Commit with descriptive messages.
 
 **Before finishing:**
-- Update `feature_list.json` (set passes=true only if verified).
-- Update `claude-progress.txt` with what you did.
-- Write a brief summary of changes to `sprint_result.md`.
-
-{contract_context}
+- Update `{feature_list}` (set passes=true only if verified).
+- Update `{progress_file}` with what you did.
+- Write a brief summary of changes to `{sprint_result}`.
 """
 
 EVALUATOR_PROMPT = """\
 You are a QA evaluator. Your job is to be SKEPTICAL — find bugs and gaps
-that the generator missed.
+that the builder missed. Do NOT trust self-reported pass status.
 
 **Your approach:**
-1. Read `plan.md` to understand the full spec.
-2. Read `feature_list.json` to see what should be working.
-3. Read `sprint_result.md` to see what was just built.
+1. Read `{plan_file}` to understand the full spec.
+2. Read `{feature_list}` to see what should be working.
+3. Read `{sprint_result}` to see what was just built.
 4. Start the app and TEST EVERY FEATURE as a real user would.
-5. Use browser automation to interact with the UI.
-6. Check the console for errors, test edge cases.
+5. Check for errors, test edge cases, verify all claimed functionality.
 
 **Grading criteria (score 0-10 each):**
 {criteria}
 
-**Output:** Write your evaluation to `eval_result.json` as:
+**Output:** Write your evaluation to `{eval_result}` as:
 {{
   "passed": true/false,
   "score": {{"criterion_name": 0-10, ...}},
@@ -108,8 +105,7 @@ that the generator missed.
 
 **Pass threshold:** ALL criteria must score >= {pass_threshold} to pass.
 
-Be thorough. Be skeptical. The generator will praise its own work —
-your job is to find what's actually broken.
+Be thorough. Be skeptical.
 """
 
 
@@ -118,16 +114,17 @@ class PipelineConfig:
     """Configuration for the planner → generator → evaluator pipeline."""
 
     work_dir: str = "."
-    max_rounds: int = 5  # max generator-evaluator cycles
-    pass_threshold: int = 7  # minimum score per criterion (0-10)
+    max_rounds: int = 5
+    pass_threshold: int = 7
     criteria: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_CRITERIA))
     max_turns_per_agent: int = 100
+    max_retries_per_phase: int = 2
+    max_cost_usd: float | None = None
 
-    # File paths (relative to work_dir)
+    # File paths
     plan_path: str = "plan.md"
     feature_list_path: str = "feature_list.json"
     progress_path: str = "claude-progress.txt"
-    contract_path: str = "sprint_contract.json"
     eval_result_path: str = "eval_result.json"
     sprint_result_path: str = "sprint_result.md"
 
@@ -140,6 +137,7 @@ class PipelineResult:
     rounds: list[dict[str, Any]] = field(default_factory=list)
     final_eval: EvalResult | None = None
     passed: bool = False
+    total_cost_usd: float = 0.0
 
 
 class Pipeline:
@@ -158,77 +156,92 @@ class Pipeline:
         spec: str,
         pipeline_config: PipelineConfig | None = None,
         evaluator_tools: list[Tool] | None = None,
+        on_event: OnEventFn = None,
     ):
         self._agent_config = agent_config
         self._tools = tools
         self._evaluator_tools = evaluator_tools or tools
         self._spec = spec
         self._config = pipeline_config or PipelineConfig()
+        self._on_event = on_event
+        self._total_cost = 0.0
         self._progress = ProgressLog(path=self._config.progress_path)
 
-    def _make_agent(self, max_turns: int | None = None) -> Agent:
-        """Create a fresh agent (full context reset)."""
-        return Agent(
-            config=CalciferConfig(
-                api_key=self._agent_config.api_key,
-                base_url=self._agent_config.base_url,
-                model=self._agent_config.model,
-                max_tokens=self._agent_config.max_tokens,
-                temperature=self._agent_config.temperature,
-                max_turns=max_turns or self._config.max_turns_per_agent,
-                system_prompt=self._agent_config.system_prompt,
-            ),
-        )
+    def _make_config(self, **overrides: Any) -> CalciferConfig:
+        return dataclasses.replace(self._agent_config, **overrides)
+
+    async def _run_agent(self, prompt: str, tools: list[Tool], phase: str, max_turns: int | None = None) -> AgentResult:
+        """Run an agent with retry, cost tracking, and event forwarding."""
+        config = self._make_config(max_turns=max_turns or self._config.max_turns_per_agent)
+
+        for attempt in range(1, self._config.max_retries_per_phase + 1):
+            try:
+                async with Agent(config=config, tools=tools) as agent:
+                    if self._agent_config.mcp_servers:
+                        await agent.connect_mcp_servers()
+                    try:
+                        if self._on_event:
+                            result = None
+                            async for event in agent.run_stream(prompt):
+                                self._on_event(phase, event)
+                                if event.type == "run_complete" and event.result:
+                                    result = event.result
+                            if result is None:
+                                raise RuntimeError("Agent ended without result")
+                        else:
+                            result = await agent.run(prompt)
+                        return result
+                    finally:
+                        self._total_cost += agent.cost_tracker.get_cost()
+            except Exception as e:
+                logger.warning("%s attempt %d failed: %s", phase, attempt, e)
+                if attempt >= self._config.max_retries_per_phase:
+                    raise
+
+        raise RuntimeError("Unreachable")  # for type checker
+
+    def _check_cost(self) -> bool:
+        """Returns True if cost limit exceeded."""
+        if self._config.max_cost_usd and self._total_cost >= self._config.max_cost_usd:
+            logger.warning("Cost limit reached: $%.2f", self._total_cost)
+            return True
+        return False
 
     async def run_planner(self) -> AgentResult:
-        """Run the planner agent to expand the spec."""
-        prompt = PLANNER_PROMPT.format(specification=self._spec)
-
-        async with self._make_agent() as agent:
-            agent.add_tools(self._tools)
-            result = await agent.run(prompt)
-
-        self._progress.append("planner", "Planner completed. Plan and feature list created.")
-        logger.info("Planner complete")
+        prompt = PLANNER_PROMPT.format(
+            specification=self._spec,
+            feature_list=self._config.feature_list_path,
+            plan_file=self._config.plan_path,
+        )
+        result = await self._run_agent(prompt, self._tools, "planner")
+        self._progress.append("planner", "Planner completed.")
         return result
 
     async def run_generator(self, round_num: int) -> AgentResult:
-        """Run one generator round (build next feature)."""
-        # Build contract context if available
-        contract_context = ""
-        contract_path = Path(self._config.contract_path)
-        if contract_path.exists():
-            contract = SprintContract.load(contract_path)
-            contract_context = f"Sprint contract:\n{contract.to_prompt()}"
-
-        prompt = GENERATOR_PROMPT.format(contract_context=contract_context)
-
-        async with self._make_agent() as agent:
-            agent.add_tools(self._tools)
-            result = await agent.run(prompt)
-
-        self._progress.append(
-            f"generator-r{round_num}",
-            f"Generator round {round_num} completed.",
+        prompt = GENERATOR_PROMPT.format(
+            feature_list=self._config.feature_list_path,
+            plan_file=self._config.plan_path,
+            progress_file=self._config.progress_path,
+            sprint_result=self._config.sprint_result_path,
         )
-        logger.info("Generator round %d complete", round_num)
+        result = await self._run_agent(prompt, self._tools, f"generator-r{round_num}")
+        self._progress.append(f"generator-r{round_num}", f"Generator round {round_num} completed.")
         return result
 
     async def run_evaluator(self, round_num: int) -> tuple[AgentResult, EvalResult | None]:
-        """Run the evaluator agent to grade the current state."""
         criteria_text = "\n".join(
             f"- **{name}:** {desc}" for name, desc in self._config.criteria.items()
         )
         prompt = EVALUATOR_PROMPT.format(
             criteria=criteria_text,
             pass_threshold=self._config.pass_threshold,
+            feature_list=self._config.feature_list_path,
+            plan_file=self._config.plan_path,
+            sprint_result=self._config.sprint_result_path,
+            eval_result=self._config.eval_result_path,
         )
+        result = await self._run_agent(prompt, self._evaluator_tools, f"evaluator-r{round_num}", max_turns=50)
 
-        async with self._make_agent(max_turns=50) as agent:
-            agent.add_tools(self._evaluator_tools)
-            result = await agent.run(prompt)
-
-        # Try to load the eval result the agent wrote
         eval_result = None
         eval_path = Path(self._config.eval_result_path)
         if eval_path.exists():
@@ -241,29 +254,30 @@ class Pipeline:
             f"evaluator-r{round_num}",
             f"Evaluator round {round_num}: {eval_result.summary() if eval_result else 'no structured result'}",
         )
-        logger.info(
-            "Evaluator round %d: %s",
-            round_num,
-            eval_result.summary() if eval_result else "no result",
-        )
         return result, eval_result
 
     async def run(self) -> PipelineResult:
         """Run the full pipeline: plan → (generate → evaluate) × N."""
         result = PipelineResult()
 
-        # Phase 1: Planning
-        if not Path(self._config.plan_path).exists():
+        # Phase 1: Planning (skip if both plan and feature list exist)
+        plan_exists = Path(self._config.plan_path).exists()
+        features_exist = Path(self._config.feature_list_path).exists()
+        if not (plan_exists and features_exist):
             result.plan_result = await self.run_planner()
 
         # Phase 2: Generate-Evaluate loop
         for round_num in range(1, self._config.max_rounds + 1):
+            if self._check_cost():
+                break
+
             logger.info("=== Round %d/%d ===", round_num, self._config.max_rounds)
 
-            # Generator
             gen_result = await self.run_generator(round_num)
 
-            # Evaluator
+            if self._check_cost():
+                break
+
             eval_agent_result, eval_result = await self.run_evaluator(round_num)
 
             round_data = {
@@ -281,7 +295,6 @@ class Pipeline:
                     result.passed = True
                     logger.info("Pipeline PASSED on round %d", round_num)
                     break
-            else:
-                logger.warning("Evaluator produced no structured result, continuing")
 
+        result.total_cost_usd = self._total_cost
         return result

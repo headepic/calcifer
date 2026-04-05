@@ -15,6 +15,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Unique delimiter for progress log sections (not likely in agent output)
+PROGRESS_DELIMITER = "---CALCIFER_SESSION_BOUNDARY---"
+
 
 @dataclass
 class Feature:
@@ -56,8 +59,13 @@ class FeatureList:
 
     @classmethod
     def load(cls, path: str | Path) -> FeatureList:
-        data = json.loads(Path(path).read_text())
-        return cls(features=[Feature.from_dict(f) for f in data])
+        """Load feature list from JSON. Returns empty list on parse error."""
+        try:
+            data = json.loads(Path(path).read_text())
+            return cls(features=[Feature.from_dict(f) for f in data])
+        except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+            logger.warning("Failed to load feature list from %s: %s", path, e)
+            return cls()
 
     @property
     def pending(self) -> list[Feature]:
@@ -83,6 +91,7 @@ class ProgressLog:
     """Append-only progress log for cross-session continuity.
 
     Each entry records what an agent did, decided, and left for next session.
+    Uses a unique delimiter to prevent agent output from corrupting parsing.
     """
 
     path: str | Path
@@ -91,7 +100,7 @@ class ProgressLog:
         """Append a progress entry."""
         import datetime
         timestamp = datetime.datetime.now().isoformat()
-        entry = f"\n## Session {session_id} — {timestamp}\n\n{content}\n"
+        entry = f"\n{PROGRESS_DELIMITER}\n## Session {session_id} — {timestamp}\n\n{content}\n"
         with open(self.path, "a") as f:
             f.write(entry)
 
@@ -105,44 +114,10 @@ class ProgressLog:
     def read_last(self, n: int = 3) -> str:
         """Read the last N session entries."""
         content = self.read()
-        sections = content.split("\n## Session ")
+        sections = content.split(PROGRESS_DELIMITER)
         if len(sections) <= n:
             return content
-        return "\n## Session ".join(sections[-n:])
-
-
-@dataclass
-class SprintContract:
-    """Agreement between generator and evaluator on what "done" means.
-
-    Negotiated before implementation starts. Both agents must agree.
-    """
-
-    feature: str
-    deliverables: list[str] = field(default_factory=list)
-    acceptance_criteria: list[str] = field(default_factory=list)
-    verification_steps: list[str] = field(default_factory=list)
-
-    def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False))
-
-    @classmethod
-    def load(cls, path: str | Path) -> SprintContract:
-        data = json.loads(Path(path).read_text())
-        return cls(**data)
-
-    def to_prompt(self) -> str:
-        lines = [f"## Sprint Contract: {self.feature}\n"]
-        lines.append("### Deliverables")
-        for d in self.deliverables:
-            lines.append(f"- {d}")
-        lines.append("\n### Acceptance Criteria")
-        for c in self.acceptance_criteria:
-            lines.append(f"- {c}")
-        lines.append("\n### Verification Steps")
-        for s in self.verification_steps:
-            lines.append(f"- {s}")
-        return "\n".join(lines)
+        return PROGRESS_DELIMITER.join(sections[-n:])
 
 
 @dataclass
@@ -154,13 +129,17 @@ class EvalResult:
     issues: list[str] = field(default_factory=list)
     suggestions: list[str] = field(default_factory=list)
 
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
     def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False))
+        """Save eval result to JSON. Utility for programmatic use."""
+        Path(path).write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False))
 
     @classmethod
     def load(cls, path: str | Path) -> EvalResult:
         data = json.loads(Path(path).read_text())
-        return cls(**data)
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     def summary(self) -> str:
         status = "PASS" if self.passed else "FAIL"

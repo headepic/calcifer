@@ -7,9 +7,8 @@ Two patterns from Anthropic's engineering research:
    init script, git history). Each session picks up where the last left off.
 
 2. **Pipeline** (planner → generator → evaluator):
-   Quality through separation. Planner expands scope, generator builds one
-   feature at a time, evaluator tests with browser automation and grades
-   against criteria.
+   Quality through separation. Planner expands scope, generator builds,
+   evaluator tests and grades against criteria.
 
 Both use context resets with file-based handoffs (not compaction) for
 multi-hour tasks spanning multiple context windows.
