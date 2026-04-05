@@ -105,9 +105,11 @@ class LLMProvider:
         model_override: str | None = None,
         max_tokens_override: int | None = None,
     ) -> dict[str, Any]:
+        from .normalize import normalize_messages_for_api
+        normalized = normalize_messages_for_api(messages)
         body: dict[str, Any] = {
             "model": model_override or self.model,
-            "messages": [m.to_openai() for m in messages],
+            "messages": [m.to_openai() for m in normalized],
             "max_tokens": max_tokens_override or self.max_tokens,
             "temperature": self.temperature,
             "stream": stream,
