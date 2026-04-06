@@ -5,6 +5,42 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — mcp-auth-refresh implemented
+
+First feature shipped through the harness workflow.
+
+Implementation:
+- MCPTransport base class gained default update_headers() (no-op with debug log)
+- SSETransport.update_headers: merges into self._headers AND httpx client.headers (takes effect on next POST)
+- HTTPTransport.update_headers: same pattern
+- WebSocketTransport.update_headers: stages headers for next reconnect (logs note)
+- StdioTransport: inherits the no-op default (stdio has no HTTP headers)
+- MCPClient: added on_auth_error: OnAuthErrorFn | None = None constructor arg
+- New OnAuthErrorFn type alias: Callable[[str], Awaitable[dict[str, str] | None]]
+- New MCPClient._transport_send method wraps self.transport.send() in try/except httpx.HTTPStatusError
+- On 401/403 with callback set and _auth_retry_count == 0: invoke callback
+- Callback returns dict: call update_headers, retry once with _auth_retry_count=1
+- Callback returns None: re-raise original HTTPStatusError
+- Callback raises: log warning, re-raise ORIGINAL auth error (not the callback's exception)
+- Retry guard prevents loops (only one refresh per request)
+- _send_request now calls _transport_send instead of transport.send directly
+- _rebuild_session and connect's notifications/initialized pings also go through _transport_send
+
+Tests (5 new, all passing):
+- test_mcp_auth_refresh_callback_success: 401 then success with new headers
+- test_mcp_auth_refresh_callback_none: 401 + None return → raises
+- test_mcp_auth_refresh_no_callback: baseline, no callback → raises
+- test_mcp_auth_refresh_callback_exception: callback raises → original error re-raised
+- test_mcp_auth_refresh_only_retries_once: verifies no loop even if retry also fails
+
+AuthRefreshTransport helper mocks httpx.HTTPStatusError by actually constructing httpx.Request/Response — no MagicMock tricks that could diverge from real httpx behavior.
+
+Mock test total: 429 → 434 (+5). No regressions.
+
+Harness workflow: the contract's verification gates (import check for on_auth_error parameter + hasattr check for update_headers + -k auth_refresh pytest filter) all correctly FAILED before implementation and PASS after. This validates the harness gating works end to end.
+
+---
+
 ## 2026-04-06 — Harness round 3 review fixes
 
 Round 3 verdict: PASS WITH MINOR FIXES. All 11 round-2 claims verified fixed. Addressed the 1 medium + 3 low + 1 info items the reviewer identified.

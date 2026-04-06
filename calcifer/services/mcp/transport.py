@@ -49,6 +49,17 @@ class MCPTransport(ABC):
     @abstractmethod
     async def close(self) -> None: ...
 
+    async def update_headers(self, headers: dict[str, str]) -> None:
+        """Update auth / request headers for subsequent send() calls.
+
+        Default implementation is a no-op — transports that don't carry
+        HTTP-style headers (stdio) should leave this unchanged. HTTP-based
+        transports override to merge into their internal header dict.
+
+        Used by MCPClient's on_auth_error refresh path.
+        """
+        logger.debug("update_headers: no-op on %s", type(self).__name__)
+
     @property
     def is_connected(self) -> bool:
         return False
@@ -232,6 +243,19 @@ class SSETransport(MCPTransport):
             raise ConnectionError(msg["error"])
         return msg
 
+    async def update_headers(self, headers: dict[str, str]) -> None:
+        """Merge new headers into this SSE transport.
+
+        Takes effect on the next send() (POST) call. Existing SSE stream
+        continues with old headers until the next reconnect.
+        """
+        self._headers.update(headers)
+        if self._client is not None:
+            # httpx.AsyncClient.headers is a mutable Headers instance
+            for k, v in headers.items():
+                self._client.headers[k] = v
+        logger.debug("SSE transport %s: updated %d header(s)", self._url, len(headers))
+
     async def close(self) -> None:
         self._connected = False
         if self._sse_task:
@@ -275,6 +299,17 @@ class HTTPTransport(MCPTransport):
     async def receive(self) -> dict[str, Any]:
         return await self._response_queue.get()
 
+    async def update_headers(self, headers: dict[str, str]) -> None:
+        """Merge new headers into this HTTP transport.
+
+        Takes effect on the next send() (POST) call.
+        """
+        self._headers.update(headers)
+        if self._client is not None:
+            for k, v in headers.items():
+                self._client.headers[k] = v
+        logger.debug("HTTP transport %s: updated %d header(s)", self._url, len(headers))
+
     async def close(self) -> None:
         self._connected = False
         if self._client:
@@ -316,6 +351,19 @@ class WebSocketTransport(MCPTransport):
             raise RuntimeError("Not connected")
         data = await self._ws.recv()
         return json.loads(data)
+
+    async def update_headers(self, headers: dict[str, str]) -> None:
+        """Update headers for the next WebSocket reconnect.
+
+        WebSocket headers are set at handshake time, so an already-open
+        connection keeps its old headers. The new values take effect
+        when the transport is closed and reconnected.
+        """
+        self._headers.update(headers)
+        logger.debug(
+            "WebSocket transport %s: %d header(s) staged for next reconnect",
+            self._url, len(headers),
+        )
 
     async def close(self) -> None:
         self._connected = False

@@ -29,11 +29,11 @@
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "No direct analog in Claude Code. claude-code-source/src/services/mcp/client.ts:363-421 (createClaudeAiProxyFetch) is Anthropic-specific (uses global getClaudeAIOAuthTokens + lockfile cache). Calcifer invents a generic callback pattern inspired by it but intentionally decoupled.",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e29296e9b634240cadc2414e5903860eb05c6ca6",
       "blocked_reason": "",
-      "verified_tree": ""
+      "verified_tree": "fbe490baa7e23537"
     },
     {
       "id": "stop-hook-inject-continue",

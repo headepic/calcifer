@@ -4,17 +4,21 @@ Implements the Model Context Protocol client:
 - initialize handshake
 - tools/list discovery
 - tools/call execution
+- on_auth_error refresh callback for HTTP 401/403
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .transport import MCPTransport
 
 logger = logging.getLogger(__name__)
+
+# Callback signature: (server_name) -> new headers or None to give up
+OnAuthErrorFn = Callable[[str], Awaitable["dict[str, str] | None"]]
 
 
 @dataclass
@@ -31,10 +35,19 @@ class MCPToolSchema:
 
 @dataclass
 class MCPClient:
-    """Client for a single MCP server."""
+    """Client for a single MCP server.
+
+    Pluggable auth refresh: pass `on_auth_error=<async callable>` to the
+    constructor. On HTTP 401/403 from the transport layer, the callback
+    is invoked with the server name and must return either a dict of new
+    headers (triggers single retry with updated headers) or None
+    (re-raises the original auth error). Callback exceptions are logged
+    and the original auth error is re-raised.
+    """
 
     name: str
     transport: MCPTransport
+    on_auth_error: OnAuthErrorFn | None = None
     _request_id: int = field(default=0, init=False)
     _tools: list[MCPToolSchema] = field(default_factory=list, init=False)
     _schema_cache: list[MCPToolSchema] = field(default_factory=list, init=False)
@@ -42,6 +55,60 @@ class MCPClient:
     def _next_id(self) -> int:
         self._request_id += 1
         return self._request_id
+
+    async def _transport_send(
+        self, request: dict[str, Any], _auth_retry_count: int = 0,
+    ) -> None:
+        """Send a request through the transport with auth-refresh handling.
+
+        Catches httpx.HTTPStatusError at the transport boundary (where it's
+        raised by raise_for_status()). On 401/403 with a callback and no
+        prior auth retry, invoke the callback and retry once with new
+        headers. This layer is separate from _send_request's JSON-RPC
+        response loop because HTTP auth errors never reach that loop.
+        """
+        try:
+            import httpx
+        except ImportError:
+            # httpx not importable for some reason — just call send
+            await self.transport.send(request)
+            return
+
+        try:
+            await self.transport.send(request)
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            should_refresh = (
+                status in (401, 403)
+                and self.on_auth_error is not None
+                and _auth_retry_count == 0
+            )
+            if not should_refresh:
+                raise
+
+            logger.info(
+                "MCP %s: auth error %d, invoking on_auth_error callback",
+                self.name, status,
+            )
+            try:
+                new_headers = await self.on_auth_error(self.name)  # type: ignore[misc]
+            except Exception as cb_exc:
+                logger.warning(
+                    "MCP %s: on_auth_error callback raised %s; re-raising original auth error",
+                    self.name, cb_exc,
+                )
+                raise e from cb_exc
+
+            if not new_headers:
+                logger.info(
+                    "MCP %s: on_auth_error returned no new headers; re-raising",
+                    self.name,
+                )
+                raise
+
+            await self.transport.update_headers(new_headers)
+            logger.info("MCP %s: retrying with refreshed auth headers", self.name)
+            return await self._transport_send(request, _auth_retry_count=1)
 
     async def _send_request(
         self, method: str, params: dict[str, Any] | None = None,
@@ -51,6 +118,9 @@ class MCPClient:
 
         Handles session expiry: HTTP 404 or error code -32001 triggers
         session rebuild (reconnect + reinitialize).
+
+        HTTP 401/403 is handled one layer down in _transport_send via the
+        on_auth_error callback.
         """
         request = {
             "jsonrpc": "2.0",
@@ -60,7 +130,7 @@ class MCPClient:
         if params is not None:
             request["params"] = params
 
-        await self.transport.send(request)
+        await self._transport_send(request)
 
         while True:
             response = await self.transport.receive()
@@ -96,7 +166,7 @@ class MCPClient:
                 "clientInfo": {"name": "calcifer", "version": "0.1.0"},
             },
         )
-        await self.transport.send(
+        await self._transport_send(
             {"jsonrpc": "2.0", "method": "notifications/initialized"}
         )
         # Re-discover tools using cache (server likely hasn't changed)
@@ -123,7 +193,7 @@ class MCPClient:
         logger.debug("MCP %s initialized: %s", self.name, result)
 
         # Send initialized notification
-        await self.transport.send(
+        await self._transport_send(
             {"jsonrpc": "2.0", "method": "notifications/initialized"}
         )
 
