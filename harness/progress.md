@@ -5,6 +5,12 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-pypi-release-v03: RELEASING.md runbook + wheel introspection tests
+
+Final SDK critical-path feature. Ships the human runbook for tagging+publishing (trusted publisher setup, per-release checklist, smoke test, rollback via yank) and 4 tests that build the actual wheel and assert py.typed ships, METADATA matches pyproject, and twine check passes. Version stays at 0.3.0.dev0 per contract; tag+upload are human-gated and happen when the maintainer follows RELEASING.md.
+
+---
+
 ## 2026-04-06 — sdk-github-actions-ci: ci.yml + publish.yml + badge
 
 CI matrix tests Python 3.11/3.12/3.13 on ubuntu+macos. Publish workflow triggers on v* tags using OIDC trusted publishing (no API token). PyYAML added to CI install line so the new test_ci_workflows.py self-test can run in CI.

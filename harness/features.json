@@ -779,20 +779,23 @@
         "Version bumped to 0.3.1.dev0 in a post-release commit"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from pathlib import Path; p=Path('RELEASING.md'); assert p.exists(), 'RELEASING.md missing'; t=p.read_text(); assert 'trusted publisher' in t.lower(), 'RELEASING.md missing trusted publisher section'; assert 'yank' in t.lower(), 'RELEASING.md missing rollback/yank section'; assert 'publish.yml' in t, 'RELEASING.md should reference publish.yml'\"",
+        ".venv/bin/python -c \"import tomllib; d=tomllib.loads(open('pyproject.toml').read()); assert d['project']['version']=='0.3.0.dev0', f\\\"version should stay 0.3.0.dev0, got {d['project']['version']!r}\\\"\"",
+        ".venv/bin/python -c \"import yaml; from pathlib import Path; ci=yaml.safe_load(Path('.github/workflows/ci.yml').read_text()); steps=ci['jobs']['test']['steps']; install_run=next(s['run'] for s in steps if 'run' in s and 'pip install' in s['run']); assert 'build' in install_run and 'twine' in install_run, f'ci.yml install line missing build/twine: {install_run!r}'\"",
+        ".venv/bin/python -m pytest tests/test_wheel_contents.py -q",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "PyPA publishing workflow.",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "27d9e78641148f5847b6616c29bd0cfe520ea13c",
+      "verified_tree": "1f3a3fb3e6465e0d",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Round 1 approved: scope split between local-verifiable (RELEASING.md + wheel-inspection tests + ci.yml install bump) and human-gated (trusted publisher, tag, upload) is clean; verification commands match verbatim; wheel fixture has no conflict with existing pyproject tests. Nit only: wheel-only build is acceptable given py.typed is the main correctness concern.",
+      "reviewed_at": "2026-04-06T13:26:45+00:00",
+      "reviewed_contract_sha": "95c41b1ef0d4cb6e",
+      "reviewer": "subagent"
     }
   ]
 }
