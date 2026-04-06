@@ -5,6 +5,12 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-github-actions-ci: ci.yml + publish.yml + badge
+
+CI matrix tests Python 3.11/3.12/3.13 on ubuntu+macos. Publish workflow triggers on v* tags using OIDC trusted publishing (no API token). PyYAML added to CI install line so the new test_ci_workflows.py self-test can run in CI.
+
+---
+
 ## 2026-04-06 — sdk-changelog-semver: CHANGELOG.md + docs/semver.md
 
 Added keep-a-changelog format CHANGELOG with [0.3.0] section listing all SDK release work since v0.2.0. New docs/semver.md is now canonical for semver policy; trimmed duplicate sections from docs/public-api.md to a one-line pointer. Two new packaging tests enforce v0.3.0 entry shape (>=5 bullets, >=2 categories) and semver doc structure.

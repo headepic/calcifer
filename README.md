@@ -1,5 +1,7 @@
 # Calcifer
 
+[![CI](https://github.com/headepic/calcifer/actions/workflows/ci.yml/badge.svg)](https://github.com/headepic/calcifer/actions/workflows/ci.yml)
+
 不绑定任何 LLM 提供商的 Python Agent Runner，复刻了 Claude Code Agent Runner 的核心机制，面向任意 OpenAI 兼容 API。
 
 ## 这是什么

@@ -742,20 +742,24 @@
         "README has CI badge"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from pathlib import Path; assert Path('.github/workflows/ci.yml').exists() and Path('.github/workflows/publish.yml').exists(), 'workflow files missing'\"",
+        ".venv/bin/python -c \"import yaml; from pathlib import Path; ci=yaml.safe_load(Path('.github/workflows/ci.yml').read_text()); m=ci['jobs']['test']['strategy']['matrix']; assert set(['3.11','3.12','3.13']).issubset(set(m['python-version'])), m['python-version']; assert 'ubuntu-latest' in m['os'] and 'macos-latest' in m['os'], m['os']\"",
+        ".venv/bin/python -c \"import yaml; from pathlib import Path; raw=Path('.github/workflows/publish.yml').read_text(); pub=yaml.safe_load(raw); assert pub['jobs']['build-and-publish']['permissions']['id-token']=='write'; assert 'password:' not in raw, 'publish.yml must not contain a password field (OIDC required)'; assert 'pypa/gh-action-pypi-publish' in raw, 'publish.yml must use pypa/gh-action-pypi-publish'\"",
+        ".venv/bin/python -c \"from pathlib import Path; t=Path('README.md').read_text(); assert 'actions/workflows/ci.yml/badge.svg' in t, 'README missing CI badge'\"",
+        ".venv/bin/python -m pytest tests/test_ci_workflows.py -q",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "pypa gh-action-pypi-publish OIDC docs.",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "42c4a0ca6783460ac66081d21426ebc6b151d0ba",
+      "verified_tree": "9d9fbae46fef9e04",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Round 2 approved: PyYAML added to CI install line + design note; cmd3 now also greps for pypa/gh-action-pypi-publish; comment hygiene note added to prevent password: false-positive.",
+      "reviewed_at": "2026-04-06T12:38:52+00:00",
+      "reviewed_contract_sha": "6d2b3c754719f6a7",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-pypi-release-v03",
