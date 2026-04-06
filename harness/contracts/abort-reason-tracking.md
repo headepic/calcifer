@@ -118,9 +118,17 @@ def _cancellation_message(reason: AbortReason | None) -> str:
 ## Verification Commands
 
 ```
-.venv/bin/python -m pytest tests/ -q -k 'abort or interrupt' --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
+.venv/bin/python -c "from calcifer.types.tools import AbortReason; assert AbortReason.USER_INTERRUPT and AbortReason.SIBLING_ERROR"
+.venv/bin/python -c "from calcifer import AbortReason"
+.venv/bin/python -c "from calcifer.types.tools import ToolContext; import dataclasses; fields = {f.name for f in dataclasses.fields(ToolContext)}; assert 'abort_reason' in fields"
+.venv/bin/python -c "from calcifer.agent import Agent; import inspect; sig = inspect.signature(Agent.abort); assert 'reason' in sig.parameters"
+.venv/bin/python -m pytest tests/ -q -k 'abort_reason'
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
 ```
+
+Narrow keyword `abort_reason` (not `abort or interrupt`) to avoid matching
+unrelated existing tests that mention interrupts. Must match `features.json`
+verification exactly.
 
 ## Rollback Plan
 

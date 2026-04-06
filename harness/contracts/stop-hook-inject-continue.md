@@ -50,11 +50,13 @@ the loop entirely or add a synthetic tool.
 Changes to `calcifer/agent.py`:
 
 1. Add `StopHookResult` dataclass near the top (after `AgentResult`)
-2. Update `StopHookFn` type:
+2. Update `StopHookFn` type — the return can be any of: bool, StopHookResult,
+   or an awaitable of either:
    ```python
+   StopHookReturn = bool | StopHookResult
    StopHookFn = Callable[
        [list[Message], "ToolContext"],
-       Awaitable[bool | StopHookResult] | bool | StopHookResult,
+       StopHookReturn | Awaitable[StopHookReturn],
    ]
    ```
 3. In the `_run_loop_inner` stop hook section (around line 740):
@@ -80,6 +82,7 @@ Tests: add test cases with:
 - [ ] StopHookResult with inject_messages non-empty appends them to conversation
 - [ ] StopHookResult with stop=True stops the loop after appending
 - [ ] Injected messages are marked `is_meta=True`
+- [ ] Injected meta messages do not break `calcifer.utils.recovery.detect_interruption` — `recovery.py:36` treats `is_meta=True` user messages as non-terminal, so our injection must not be misread as mid-prompt interruption
 - [ ] Hook exceptions are caught and logged, not propagated (existing behavior preserved)
 - [ ] New test `test_stop_hook_inject_and_continue` verifies injection without stopping
 - [ ] New test `test_stop_hook_inject_and_stop` verifies inject + stop
@@ -89,9 +92,13 @@ Tests: add test cases with:
 ## Verification Commands
 
 ```
-.venv/bin/python -m pytest tests/ -q -k 'hook' --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
+.venv/bin/python -c "from calcifer.agent import StopHookResult; r = StopHookResult(stop=False, inject_messages=[]); assert hasattr(r, 'stop') and hasattr(r, 'inject_messages')"
+.venv/bin/python -c "from calcifer import StopHookResult"
+.venv/bin/python -m pytest tests/ -q -k 'stop_hook_inject'
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
 ```
+
+Must match `features.json` verification exactly.
 
 ## Rollback Plan
 

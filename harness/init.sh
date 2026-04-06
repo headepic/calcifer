@@ -8,6 +8,7 @@
 #   2 = dirty working tree (uncommitted changes)
 
 set -e
+set -o pipefail
 
 cd "$(dirname "$0")/.."
 
@@ -32,29 +33,40 @@ if ! .venv/bin/python -c "import calcifer" 2>/dev/null; then
 fi
 echo "OK: calcifer importable"
 
-# 4. Working tree clean
-if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+# 4. Working tree clean (including untracked files)
+if [ -n "$(git status --porcelain)" ]; then
     echo ""
-    echo "WARN: working tree has uncommitted changes:"
+    echo "WARN: working tree has uncommitted changes (tracked or untracked):"
     git status -s
     echo ""
-    echo "A session should start from a clean state. Commit or stash first."
+    echo "A session should start from a clean state. Commit, stash, or clean first."
     exit 2
 fi
 echo "OK: working tree clean"
 
 # 5. Test suite (quick sanity check — mock tests only)
 echo ""
-echo "==> Running mock test suite..."
-if .venv/bin/python -m pytest tests/ -x -q \
+echo "==> Running mock test suite (timeout: 300s)..."
+_PYTEST_LOG=$(mktemp)
+if timeout 300 .venv/bin/python -m pytest tests/ -x -q \
     --ignore=tests/test_e2e_real.py \
     --ignore=tests/test_e2e_mcp_skill.py \
     --ignore=tests/test_tui_web.py \
-    2>&1 | tail -3; then
+    > "$_PYTEST_LOG" 2>&1; then
+    tail -3 "$_PYTEST_LOG"
+    rm -f "$_PYTEST_LOG"
     echo ""
     echo "OK: tests pass"
 else
-    echo "FAIL: tests failing. Fix before starting a new session."
+    _RC=$?
+    tail -20 "$_PYTEST_LOG"
+    rm -f "$_PYTEST_LOG"
+    echo ""
+    if [ $_RC -eq 124 ]; then
+        echo "FAIL: tests timed out after 300s"
+    else
+        echo "FAIL: tests failing (exit $_RC). Fix before starting a new session."
+    fi
     exit 1
 fi
 

@@ -5,6 +5,20 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — Harness round 1 review fixes
+
+Applied fixes from external reviewer (15 issues found). Critical fixes:
+
+- init.sh: added set -o pipefail and switched cleanliness check to git status --porcelain (catches untracked files). Added 300s test timeout.
+- harness.py: atomic save via tempfile + os.replace. Per-command 600s verify timeout. Allow-listed command prefixes. Blocked unquoted shell metachars. verified_sha cache prevents complete from re-running tests. progress.md touch gate on complete. New subcommands: resume, block, reset, log.
+- features.json: replaced all grep-based gates with import/attribute checks via python -c. Tighter pytest -k filters to avoid false positives from pre-existing tests.
+- Renamed pre-post-tool-hooks to wire-hooks-into-orchestrator after discovering HookEvent.PRE_TOOL_USE and HookManager already exist; the real gap is orchestrator wiring. Rewrote contract accordingly.
+- Fixed mcp-auth-refresh design: HTTP auth errors raise from transport layer (raise_for_status), never reach _send_request's JSON-RPC loop. Catch must happen wrapping transport.send() call. Reference is now honestly noted as 'no direct analog in Claude Code'.
+- Fixed StopHookFn type expression typo. Added is_meta + recovery.detect_interruption interaction criterion.
+- Aligned all contract verification commands with features.json to single source of truth.
+
+---
+
 ## 2026-04-06 — Harness established
 
 Set up the harness workflow in `harness/` following the design principles from

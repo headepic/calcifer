@@ -54,37 +54,55 @@ Harness 工作流把每个 feature 的开发拆成三个阶段：
 ```bash
 # 1. 启动检查
 ./harness/init.sh
-# 验证：venv 存在、依赖安装、tests 全过、git 干净
+# 验证：venv、依赖、pytest 全过（带 300s 超时）、git 干净（含 untracked）
 
 # 2. 看状态
 python harness/harness.py status
-# 显示：总数、已完成、进行中、下一个优先级
 
-# 3. 选下一个 feature
+# 3. 看有无半成品（in_progress 的 feature 优先完成）
+python harness/harness.py resume
+# 如果有 in_progress feature，先完成它们再开新的
+
+# 4. 选下一个 feature
 python harness/harness.py pick
-# 输出优先级最高的 pending feature ID
+# 输出优先级最高的 pending feature ID + 合约路径
 
-# 4. 读合约
+# 5. 读合约
 cat harness/contracts/<feature-id>.md
-# 如果不存在 → 先进 Plan 阶段，写合约，commit，再开始实现
+# 如果不存在 → python harness/harness.py add <id> 生成 stub，然后填写
 
-# 5. 实现
-# （只动相关代码，小步 commit）
+# 6. 实现（只动相关代码，小步 commit）
 
-# 6. 验证
+# 7. 验证
 python harness/harness.py verify <feature-id>
-# 运行合约中定义的所有验证命令
+# 运行合约中的验证命令（allow-listed，带 600s 超时）
+# 成功后 verified_sha 写入 features.json 作为缓存
 
-# 7. 标记完成
+# 8. 追加进度日志
+python harness/harness.py log "<feature-id>: 做了什么" --body "细节..."
+# 或手动在 progress.md 顶部追加一段
+
+# 9. 标记完成
 python harness/harness.py complete <feature-id>
-# 只修改 features.json 的 passes 字段
+# 如果 HEAD 未变 → 跳过重复 verify；否则重跑
+# 必须 progress.md 有未提交的改动（防止忘记记录）
+# 把 passes=true 原子写入 features.json
 
-# 8. 记录
-# 编辑 harness/progress.md，追加一段描述本 session 做了什么
-
-# 9. 提交
+# 10. 提交
 git add -A
 git commit -m "feat(<area>): implement <feature-id>"
+```
+
+### 异常情况
+
+```bash
+# Feature 跑到一半发现 scope 错了或 block 了
+python harness/harness.py block <feature-id> --reason "为什么卡住"
+# 然后在 progress.md 记录，commit
+
+# 反复 verify 失败，想回到 pending 重新考虑
+python harness/harness.py reset <feature-id>
+# 清掉 verified_sha 和 blocked_reason，status 回 pending
 ```
 
 ## 规则（强约束）
@@ -103,14 +121,43 @@ git commit -m "feat(<area>): implement <feature-id>"
 ```
 harness/
 ├── README.md           # 本文件
-├── init.sh             # 环境启动检查
-├── harness.py          # 工作流 CLI (status/pick/verify/complete)
-├── features.json       # feature 列表 + 状态（真实来源）
+├── init.sh             # 环境启动检查（带 pipefail + 300s 超时 + 含 untracked 的 dirty 检测）
+├── harness.py          # 工作流 CLI（subcommands 见下）
+├── features.json       # feature 列表 + 状态（真实来源，atomic write）
 ├── progress.md         # session 日志（append-only）
 └── contracts/          # 每个 feature 的验收合约
     ├── README.md       # 合约模板
     └── <id>.md         # 具体合约
 ```
+
+### harness.py subcommands
+
+| 命令 | 作用 |
+|------|------|
+| `status` | 显示 backlog 总览 |
+| `pick` | 选优先级最高的 pending feature（in_progress 优先警告） |
+| `resume` | 列出所有 in_progress feature |
+| `add <id>` | 添加新 feature（生成 stub 合约） |
+| `verify <id>` | 运行合约验证命令（allow-listed + timeout） |
+| `complete <id>` | 标记 feature 为 done（需 verified_sha 匹配 HEAD 或重跑） |
+| `block <id> --reason "..."` | 标记为 blocked |
+| `reset <id>` | 重置为 pending（清 verified_sha 和 blocked_reason） |
+| `log "title"` | 追加 progress.md 条目 |
+
+### Verification 命令的安全约束
+
+- 每条命令必须匹配 allow-list 前缀：`grep`, `pytest`, `.venv/bin/python`,
+  `python -c`, `python -m pytest` 等
+- 禁止 shell 元字符：`;`, `&&`, `||`, `\``, `$(`, `>`, `<`
+- 每条命令有 600s 超时
+- 首选**导入 + 属性检查**而非 `grep`：
+  ```
+  # 好：真实验证 feature 已实现
+  .venv/bin/python -c "from calcifer.agent import StopHookResult"
+  
+  # 坏：注释或字符串也能通过
+  grep -q 'StopHookResult' calcifer/agent.py
+  ```
 
 ## 为什么不直接照搬文章
 

@@ -76,9 +76,13 @@ Tests:
 ## Verification Commands
 
 ```
+.venv/bin/python -c "from calcifer.skills.loader import SkillDefinition; import dataclasses; assert 'when_to_use' in {f.name for f in dataclasses.fields(SkillDefinition)}"
+.venv/bin/python -m pytest tests/ -q -k 'when_to_use'
 .venv/bin/python -m pytest tests/test_skill.py tests/test_skill_full.py -q
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
 ```
+
+Must match `features.json` verification exactly.
 
 ## Rollback Plan
 

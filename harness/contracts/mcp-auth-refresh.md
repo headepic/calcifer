@@ -9,14 +9,21 @@ that Calcifer lacks.
 
 ## Claude Code Reference
 
-- `src/services/mcp/client.ts:363-421` — OAuth token handling
-  - `checkAndRefreshOAuthTokenIfNeeded()` at line 375 — proactive refresh
-  - `handleOAuth401Error()` at line 402 — reactive refresh on 401, retry if token changed
-- `src/services/mcp/client.ts:152-159` — `McpAuthError` class
-- `src/services/mcp/client.ts:257-316` — file-backed auth cache (15-min TTL)
+**Important: no direct analog exists in Claude Code.**
 
-The cache layer is out of scope (see non-goals). We only replicate the
-refresh-and-retry mechanism.
+`claude-code-source/src/services/mcp/client.ts:363-421` is
+`createClaudeAiProxyFetch()`, which is specific to claude.ai's OAuth proxy:
+- Uses Anthropic's keychain-backed `getClaudeAIOAuthTokens()` singleton
+- Calls `checkAndRefreshOAuthTokenIfNeeded()` — a global refresh cycle,
+  not a pluggable callback
+- Uses lockfile-based cache invalidation
+
+That pattern is tightly coupled to Anthropic's OAuth machinery. Calcifer is
+provider-agnostic, so we invent a **generic callback** inspired by the
+reactive-refresh idea but decoupled from any specific OAuth flow.
+
+The cache layer, proactive refresh, and needs-auth file cache are all
+explicitly out of scope (see non-goals).
 
 ## Scope
 
@@ -43,40 +50,108 @@ refresh-and-retry mechanism.
 
 ## Design
 
-Changes to `calcifer/services/mcp/client.py`:
+### Critical: auth errors happen in the transport layer, not in `_send_request`
 
-1. Add `on_auth_error` parameter to `MCPClient` dataclass (callable or None)
-2. Extend `_send_request` to catch auth errors (currently only catches -32001):
-   - Detect by HTTP status (if available from transport) or JSON-RPC error code
-   - Before raising, check if callback is set AND we haven't retried yet
-   - If yes: call callback, update `self.transport` headers if possible, retry
-3. Only one retry per request (similar to existing `_retry_count` pattern)
+`calcifer/services/mcp/transport.py` lines 227 and 270 call
+`resp.raise_for_status()` right after POSTing. A 401 from the server becomes
+`httpx.HTTPStatusError` raised **from inside `transport.send()`** — it never
+reaches `_send_request()`'s JSON-RPC response loop. So catching it inside the
+response loop (as an earlier draft of this contract proposed) is wrong.
 
-Transport layer concern: the HTTP/SSE transports need a way to update headers
-after connect. Check current `transport.py` — if `headers` is only set in
-`__init__`, we need to add a `update_headers(h: dict)` method to the abstract
-`MCPTransport` class.
+The catch must happen where `self.transport.send(request)` is called.
+
+### Changes to `calcifer/services/mcp/transport.py`
+
+Add `update_headers` to the `MCPTransport` abstract base class:
+
+```python
+class MCPTransport(ABC):
+    @abstractmethod
+    async def update_headers(self, headers: dict[str, str]) -> None:
+        """Update auth / request headers for subsequent send() calls."""
+        ...
+```
+
+Implementations:
+- `StdioTransport.update_headers` — no-op (stdio has no HTTP headers, log a debug line)
+- `SSETransport.update_headers` — merge into `self._headers` (or whatever the
+  current field is called); next SSE reconnect picks them up
+- `HTTPTransport.update_headers` — merge into the dict passed to `httpx.post(..., headers=...)`
+- `WebSocketTransport.update_headers` — best-effort; log + update for reconnect
+
+### Changes to `calcifer/services/mcp/client.py`
+
+1. Add constructor parameter:
+   ```python
+   @dataclass
+   class MCPClient:
+       name: str
+       transport: MCPTransport
+       on_auth_error: Callable[[str], Awaitable[dict[str, str] | None]] | None = None
+       ...
+   ```
+
+2. Wrap `await self.transport.send(request)` in `_send_request`:
+   ```python
+   async def _send_request(self, method, params=None, _retry_count=0):
+       request = {...}
+       try:
+           await self.transport.send(request)
+       except httpx.HTTPStatusError as e:
+           status = e.response.status_code
+           if status in (401, 403) and self.on_auth_error and _retry_count == 0:
+               logger.info("MCP %s: auth error %d, calling refresh callback", self.name, status)
+               try:
+                   new_headers = await self.on_auth_error(self.name)
+               except Exception as cb_exc:
+                   logger.warning("MCP %s: on_auth_error callback raised: %s", self.name, cb_exc)
+                   raise e from cb_exc
+               if new_headers:
+                   await self.transport.update_headers(new_headers)
+                   return await self._send_request(method, params, _retry_count=1)
+           raise
+       # ... existing response loop unchanged
+   ```
+
+### Stdio behavior
+
+Stdio transport is documented as a no-op for auth refresh. If an auth
+callback is set and a stdio transport is used, we log a warning once on
+first use. Stdio MCP servers authenticate via environment variables at
+subprocess launch, not via headers; refresh requires relaunching the
+process (explicitly out of scope).
 
 ## Acceptance Criteria
 
-- [ ] `MCPClient.__init__` accepts `on_auth_error: Callable[[str], Awaitable[dict | None]] | None = None`
-- [ ] `MCPTransport` abstract class has `update_headers(headers: dict) -> None` method (stdio no-op, sse/http updates)
-- [ ] `_send_request` detects 401/403 (HTTP) and auth-related JSON-RPC errors
-- [ ] On auth error with callback set and no prior retry: invoke callback
-- [ ] If callback returns dict: update headers, retry request once
-- [ ] If callback returns None: raise original auth error
-- [ ] Callback exceptions are caught and logged, original auth error raised
+- [ ] `MCPTransport` abstract class has `update_headers(headers: dict) -> None` method
+- [ ] `StdioTransport.update_headers` is a no-op + debug log
+- [ ] `SSETransport.update_headers` updates internal headers
+- [ ] `HTTPTransport.update_headers` updates internal headers
+- [ ] `MCPClient.__init__` accepts `on_auth_error` parameter
+- [ ] `_send_request` wraps `self.transport.send(request)` in try/except `httpx.HTTPStatusError`
+- [ ] 401/403 with callback set and `_retry_count == 0` invokes the callback
+- [ ] Callback returning dict triggers `update_headers` + single retry
+- [ ] Callback returning None raises the original `HTTPStatusError`
+- [ ] Callback raising an exception logs and re-raises the original `HTTPStatusError`
+- [ ] No retry after first retry (`_retry_count` guard prevents loops)
 - [ ] New test `test_mcp_auth_refresh_callback_success` — simulates 401 → callback returns headers → retry succeeds
 - [ ] New test `test_mcp_auth_refresh_callback_none` — simulates 401 → callback returns None → raises
-- [ ] New test `test_mcp_auth_refresh_no_callback` — simulates 401 → no callback → raises (current behavior)
+- [ ] New test `test_mcp_auth_refresh_no_callback` — simulates 401 → no callback → raises (baseline)
+- [ ] New test `test_mcp_auth_refresh_callback_exception` — callback raises → original 401 raised
 - [ ] All existing mock tests still pass (429 baseline)
 
 ## Verification Commands
 
 ```
+.venv/bin/python -c "from calcifer.services.mcp.client import MCPClient; import inspect; sig = inspect.signature(MCPClient); assert 'on_auth_error' in sig.parameters, 'on_auth_error missing from MCPClient'"
+.venv/bin/python -c "from calcifer.services.mcp.transport import MCPTransport; assert hasattr(MCPTransport, 'update_headers'), 'update_headers missing from MCPTransport'"
+.venv/bin/python -m pytest tests/test_mcp.py -q -k 'auth_refresh'
 .venv/bin/python -m pytest tests/test_mcp.py -q
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
 ```
+
+Must match the `verification` array in `harness/features.json` exactly —
+keep the two in sync when editing.
 
 ## Rollback Plan
 

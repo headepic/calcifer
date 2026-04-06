@@ -1,56 +1,71 @@
 {
   "version": 1,
-  "description": "Calcifer feature backlog. Only harness.py complete modifies passes. All other fields require explicit commit.",
+  "description": "Calcifer feature backlog. Only harness.py complete modifies passes and verified_sha. All other fields require an explicit plan commit.",
   "features": [
     {
       "id": "mcp-auth-refresh",
       "title": "MCP auth token refresh callback",
       "category": "mcp",
       "priority": "medium",
-      "description": "Allow long-running sessions to recover from expired MCP auth tokens via a user-provided refresh callback.",
-      "motivation": "Sessions >30min that connect to OAuth-protected MCP servers currently break on 401. Claude Code handles this with checkAndRefreshOAuthTokenIfNeeded + handleOAuth401Error. Calcifer has no equivalent — the agent crashes mid-session.",
+      "description": "Allow long-running sessions to recover from expired MCP auth tokens via a user-provided refresh callback. Catches HTTPStatusError at the transport boundary (where httpx actually raises), not inside _send_request's JSON-RPC loop.",
+      "motivation": "Sessions >30min that connect to OAuth-protected MCP servers currently die when the HTTP transport raises HTTPStatusError(401) from raise_for_status(). Claude Code's approach (claude.ts proxy fetch) is Anthropic-specific, so Calcifer invents a pluggable callback: the user provides a coroutine that takes the server name and returns fresh headers (or None to give up).",
       "acceptance_criteria": [
-        "MCPClient accepts an optional on_auth_error callback",
-        "401/403 responses trigger the callback with the server name",
-        "Callback can return new headers (dict) or None",
-        "If new headers returned, request is retried once with them",
-        "If callback is None or returns None, original behavior (raise) preserved",
-        "New tests in tests/test_mcp.py cover the refresh + retry path",
+        "MCPClient __init__ accepts on_auth_error: Callable[[str], Awaitable[dict|None]] | None = None",
+        "MCPTransport abstract class has update_headers(headers: dict) -> None; sse/http update, stdio no-ops",
+        "_send_request wraps transport.send() in try/except httpx.HTTPStatusError catching 401 and 403",
+        "On auth error with callback set and no prior retry: invoke callback, update headers, retry once",
+        "If callback returns None or is not set: raise the original HTTPStatusError",
+        "Callback exceptions are logged and the original auth error is raised",
+        "New test test_mcp_auth_refresh_callback_success — 401 then success",
+        "New test test_mcp_auth_refresh_callback_none — 401 with None return raises",
+        "New test test_mcp_auth_refresh_no_callback — 401 with no callback raises (baseline)",
         "All existing mock tests still pass"
       ],
       "verification": [
-        "grep -q 'on_auth_error' calcifer/services/mcp/client.py",
+        ".venv/bin/python -c \"from calcifer.services.mcp.client import MCPClient; import inspect; sig = inspect.signature(MCPClient); assert 'on_auth_error' in sig.parameters, 'on_auth_error missing from MCPClient'\"",
+        ".venv/bin/python -c \"from calcifer.services.mcp.transport import MCPTransport; assert hasattr(MCPTransport, 'update_headers'), 'update_headers missing from MCPTransport'\"",
         ".venv/bin/python -m pytest tests/test_mcp.py -q -k 'auth_refresh'",
         ".venv/bin/python -m pytest tests/test_mcp.py -q",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
-      "reference": "claude-code-source/src/services/mcp/client.ts:363-421 (checkAndRefreshOAuthTokenIfNeeded, handleOAuth401Error)",
+      "reference": "No direct analog in Claude Code. claude-code-source/src/services/mcp/client.ts:363-421 (createClaudeAiProxyFetch) is Anthropic-specific (uses global getClaudeAIOAuthTokens + lockfile cache). Calcifer invents a generic callback pattern inspired by it but intentionally decoupled.",
       "status": "pending",
-      "passes": false
+      "passes": false,
+      "verified_sha": "",
+      "blocked_reason": ""
     },
     {
       "id": "stop-hook-inject-continue",
       "title": "Stop hooks can inject messages and continue",
       "category": "agent-loop",
       "priority": "medium",
-      "description": "Allow stop hooks to return a structured result: either stop the loop, or inject messages and continue.",
-      "motivation": "Claude Code's handleStopHooks can return blockingErrors that get injected as messages while the loop continues — used for budget warnings, content filter corrections, etc. Calcifer's stop hooks can only return bool (stop/not-stop). This limits extensibility.",
+      "description": "Allow stop hooks to return a structured result: either stop the loop, or inject messages and continue. Backward-compatible with the existing bool return.",
+      "motivation": "Claude Code's handleStopHooks returns blockingErrors that get injected as meta messages while the loop continues — used for budget warnings, content filter corrections, etc. Calcifer's stop hooks can only return bool (stop/not-stop). This limits extensibility for budget/policy hooks that want to nudge the model without killing the session.",
       "acceptance_criteria": [
-        "New StopHookResult dataclass with fields: stop (bool), inject_messages (list[Message])",
-        "Stop hooks can return either bool (backward compat) or StopHookResult",
-        "If inject_messages is non-empty, messages are appended to conversation before the next turn",
-        "If stop is True, loop breaks after injection (current turn still emits turn_end)",
-        "New test covers inject-and-continue path",
-        "Existing stop-hook tests (bool return) still pass"
+        "New StopHookResult dataclass in calcifer/agent.py with fields stop: bool and inject_messages: list[Message]",
+        "StopHookResult exported from calcifer/__init__.py",
+        "StopHookFn type accepts bool OR StopHookResult (sync or async)",
+        "Loop normalizes bool returns to StopHookResult internally",
+        "Injected messages appended to conversation (before next turn), marked is_meta=True",
+        "If any hook sets stop=True, loop breaks after all hooks run and injections applied",
+        "Hook exceptions are caught and logged (existing behavior preserved)",
+        "Injected meta messages do not break recovery.detect_interruption",
+        "New test test_stop_hook_inject_and_continue — inject without stopping",
+        "New test test_stop_hook_inject_and_stop — inject and then stop",
+        "Existing bool-based stop hook tests still pass",
+        "All 429 mock tests still pass"
       ],
       "verification": [
-        "grep -q 'StopHookResult' calcifer/agent.py",
+        ".venv/bin/python -c \"from calcifer.agent import StopHookResult; r = StopHookResult(stop=False, inject_messages=[]); assert hasattr(r, 'stop') and hasattr(r, 'inject_messages')\"",
+        ".venv/bin/python -c \"from calcifer import StopHookResult\"",
         ".venv/bin/python -m pytest tests/ -q -k 'stop_hook_inject'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
-      "reference": "claude-code-source/src/query/stopHooks.ts:64-250 (handleStopHooks, blockingErrors, preventContinuation)",
+      "reference": "claude-code-source/src/query/stopHooks.ts:64-250 (handleStopHooks returns {blockingErrors, preventContinuation}) and src/query.ts:1267-1306 (caller integration)",
       "status": "pending",
-      "passes": false
+      "passes": false,
+      "verified_sha": "",
+      "blocked_reason": ""
     },
     {
       "id": "abort-reason-tracking",
@@ -58,47 +73,69 @@
       "category": "agent-loop",
       "priority": "low",
       "description": "Replace the bare asyncio.Event abort signal with a reason-aware signal distinguishing user interrupt from sibling error propagation.",
-      "motivation": "Claude Code's AbortController carries a reason field (interrupt, sibling_error, streaming_fallback) used for debugging and synthetic error messages. Calcifer's single Event loses this distinction — tools all see the same opaque 'aborted' state.",
+      "motivation": "Claude Code's AbortController carries a reason field (interrupt, sibling_error, streaming_fallback) used for debugging and synthetic error messages. Calcifer's single Event loses this distinction — all cancelled tools get the same opaque message.",
       "acceptance_criteria": [
-        "New AbortReason enum (user_interrupt, sibling_error, timeout, other)",
-        "Agent.abort() accepts an optional reason argument (defaults to user_interrupt)",
-        "ToolContext.abort_reason field populated when abort_signal is True",
-        "Tool result messages for aborted tools include the reason",
-        "Backward-compat: bool abort_signal still works; existing tests pass"
+        "New AbortReason enum in calcifer/types/tools.py with values: USER_INTERRUPT, SIBLING_ERROR, TIMEOUT, OTHER",
+        "AbortReason exported from calcifer/__init__.py and calcifer/types/__init__.py",
+        "ToolContext.abort_reason field added (Optional[AbortReason], default None)",
+        "Agent.abort() accepts reason parameter (default USER_INTERRUPT)",
+        "Agent._abort_reason tracks the most recent abort reason",
+        "context.abort_reason propagates from agent state to tool context",
+        "Sibling-error cancellation sets SIBLING_ERROR on the tool result message",
+        "Cancelled tool result messages include reason text",
+        "New test test_abort_user_interrupt_reason",
+        "New test test_abort_sibling_error_reason",
+        "New test test_abort_default_reason",
+        "All 429 mock tests still pass"
       ],
       "verification": [
-        "grep -q 'class AbortReason' calcifer/types/tools.py",
+        ".venv/bin/python -c \"from calcifer.types.tools import AbortReason; assert AbortReason.USER_INTERRUPT and AbortReason.SIBLING_ERROR\"",
+        ".venv/bin/python -c \"from calcifer import AbortReason\"",
+        ".venv/bin/python -c \"from calcifer.types.tools import ToolContext; import dataclasses; fields = {f.name for f in dataclasses.fields(ToolContext)}; assert 'abort_reason' in fields\"",
+        ".venv/bin/python -c \"from calcifer.agent import Agent; import inspect; sig = inspect.signature(Agent.abort); assert 'reason' in sig.parameters\"",
         ".venv/bin/python -m pytest tests/ -q -k 'abort_reason'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
-      "reference": "claude-code-source/src/services/tools/StreamingToolExecutor.ts:153-318 (abort reasons + sibling AbortController)",
+      "reference": "claude-code-source/src/services/tools/StreamingToolExecutor.ts:153-318 (abort reasons + sibling AbortController). claude-code-source/src/query.ts:1348-1351 (end-of-turn abort reason check).",
       "status": "pending",
-      "passes": false
+      "passes": false,
+      "verified_sha": "",
+      "blocked_reason": ""
     },
     {
-      "id": "pre-post-tool-hooks",
-      "title": "Pre and post tool execution hooks",
+      "id": "wire-hooks-into-orchestrator",
+      "title": "Wire existing HookManager into tool orchestrator",
       "category": "tools",
-      "priority": "low",
-      "description": "Add pre-tool and post-tool hook points to the execution pipeline for extensibility (logging, validation, mutation).",
-      "motivation": "Claude Code has runPreToolUseHooks and runPostToolUseHooks run around every tool call. Enables features like audit logging, content filtering, or input rewriting without touching tool code. Calcifer currently has no extension point between validate and call.",
+      "priority": "medium",
+      "description": "HookEvent.PRE_TOOL_USE and POST_TOOL_USE plus HookManager.run_hooks already exist in calcifer/services/hooks.py, but the tool orchestrator never calls them. This feature wires hook invocation into execute_tool_call and StreamingToolExecutor.",
+      "motivation": "The hook infrastructure (HookManager, HookConfig, HookResult with should_continue/updated_input/additional_context) is fully built but disconnected — the orchestrator has no hook calls. This is a low-effort, high-value wiring job: no new types, just connecting existing pieces. Enables audit logging, content filtering, input rewriting without touching tool code.",
       "acceptance_criteria": [
-        "New HookManager.on_pre_tool and HookManager.on_post_tool registration methods",
-        "Pre-tool hooks run after validation, before tool.call()",
-        "Pre-tool hooks can veto execution (return False) or mutate input (return dict)",
-        "Post-tool hooks run after tool.call() with the ToolResult",
-        "Post-tool hooks can mutate the result (return ToolResult)",
-        "Hook failures are logged but do not crash the tool call",
-        "New tests cover pre-veto, pre-mutate, post-mutate, and hook failure paths"
+        "ToolContext has an optional hook_manager: HookManager | None = None field",
+        "Agent passes self._hook_manager to every ToolContext it creates",
+        "execute_tool_call in orchestrator.py invokes hook_manager.run_hooks(PRE_TOOL_USE, ...) after check_input, before tool.call",
+        "If pre-hook returns should_continue=False: produce an error tool result with the stop_reason and skip tool.call",
+        "If pre-hook returns updated_input: re-validate and use the new input for tool.call",
+        "execute_tool_call invokes hook_manager.run_hooks(POST_TOOL_USE, ...) after tool.call, before context_modifier",
+        "Post-hook additional_context is appended to the tool result content",
+        "Hook exceptions are caught and logged (do not crash tool execution)",
+        "HookManager (not just the instance) is importable as calcifer.HookManager (already exported)",
+        "New test test_pre_tool_hook_veto — pre-hook stops execution",
+        "New test test_pre_tool_hook_rewrite — pre-hook mutates input",
+        "New test test_post_tool_hook_additional_context — post-hook appends text",
+        "New test test_hook_exception_does_not_crash",
+        "All 429 mock tests still pass"
       ],
       "verification": [
-        "grep -q 'PRE_TOOL_USE' calcifer/services/hooks.py",
-        ".venv/bin/python -m pytest tests/ -q -k 'pre_tool_hook or post_tool_hook'",
+        ".venv/bin/python -c \"from calcifer.types.tools import ToolContext; import dataclasses; assert 'hook_manager' in {f.name for f in dataclasses.fields(ToolContext)}\"",
+        ".venv/bin/python -c \"from calcifer.services.tools.orchestrator import execute_tool_call; import inspect; src = inspect.getsource(execute_tool_call); assert 'run_hooks' in src and 'PRE_TOOL_USE' in src and 'POST_TOOL_USE' in src, 'orchestrator does not call hook_manager.run_hooks(PRE/POST_TOOL_USE)'\"",
+        ".venv/bin/python -m pytest tests/ -q -k 'pre_tool_hook_veto or pre_tool_hook_rewrite or post_tool_hook_additional_context or tool_hook_exception_does_not_crash'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
-      "reference": "claude-code-source/src/services/tools/toolExecution.ts:599-900 (runPreToolUseHooks, runPostToolUseHooks)",
+      "reference": "calcifer/services/hooks.py:25-32,71+ (HookEvent, HookManager.run_hooks — already exist). claude-code-source/src/services/tools/toolExecution.ts:599-900 (runPreToolUseHooks, runPostToolUseHooks calling pattern).",
       "status": "pending",
-      "passes": false
+      "passes": false,
+      "verified_sha": "",
+      "blocked_reason": ""
     },
     {
       "id": "when-to-use-skill-field",
@@ -106,23 +143,29 @@
       "category": "skills",
       "priority": "low",
       "description": "Add when_to_use frontmatter field to skill definitions, surfaced in the skill list prompt so the LLM knows when to invoke each skill.",
-      "motivation": "Claude Code skills have a when_to_use field that tells the model when each skill is relevant. Calcifer currently only has description, which is often too terse. Adding when_to_use improves skill selection without adding a new concept.",
+      "motivation": "Claude Code skills have a when_to_use field that tells the model when each skill is relevant. Calcifer currently only has description, which is often too terse. Adding when_to_use improves skill selection without adding a new concept. Canary feature — small and isolated, good first workflow run.",
       "acceptance_criteria": [
         "SkillDefinition has a when_to_use field (str, default empty)",
-        "load_skill_file parses when-to-use from frontmatter",
+        "load_skill_file parses both when-to-use and when_to_use from frontmatter",
         "apply_token_budget includes when_to_use in the entry when present",
+        "Token char count includes when_to_use length",
         "Existing skills without when_to_use still load correctly",
-        "New test verifies when_to_use parsing and budget inclusion"
+        "New test test_skill_when_to_use_parsing",
+        "New test test_skill_budget_includes_when_to_use",
+        "Existing skill tests still pass",
+        "All 429 mock tests still pass"
       ],
       "verification": [
-        "grep -q 'when_to_use' calcifer/skills/loader.py",
+        ".venv/bin/python -c \"from calcifer.skills.loader import SkillDefinition; import dataclasses; assert 'when_to_use' in {f.name for f in dataclasses.fields(SkillDefinition)}\"",
         ".venv/bin/python -m pytest tests/ -q -k 'when_to_use'",
         ".venv/bin/python -m pytest tests/test_skill.py tests/test_skill_full.py -q",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "claude-code-source/src/skills/loadSkillsDir.ts:185-265 (whenToUse frontmatter parsing)",
       "status": "pending",
-      "passes": false
+      "passes": false,
+      "verified_sha": "",
+      "blocked_reason": ""
     }
   ]
 }
