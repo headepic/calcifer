@@ -185,16 +185,16 @@
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "claude-code-source/src/skills/loadSkillsDir.ts:185-265 (whenToUse frontmatter parsing)",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "ca5e34fcecc45912963d55b16329ffa0ed1ba949",
       "blocked_reason": "",
-      "verified_tree": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "verified_tree": "76c253ec52f608e2",
+      "review_status": "approved",
+      "review_notes": "Approved (high confidence, fresh-context subagent review). Symbol collision check clean: SkillDefinition at calcifer/skills/loader.py:28 has no when_to_use field, no parser wiring, zero grep hits in calcifer/ and tests/. Design matches source reality (known_keys set at loader.py:80, apply_token_budget snippet at loader.py:203 matches contract verbatim). Verification gate is real: field-check and -k when_to_use both fail before impl, pass after. Two non-blocking nits: (a) contract says '429 mock tests' baseline but actual is 451 — regression command runs whole suite so drift is inert; (b) contract claims upstream accepts 'camelCase or snake_case' for when_to_use but loadSkillsDir.ts:252 only reads frontmatter.when_to_use (snake_case) — Calcifer's both-keys parsing is a legitimate extension but the upstream claim is slightly inaccurate. Generator note: ensure the two new tests assert on parsed VALUE and budget output substring, not just field existence, to keep rule 8 footgun closed.",
+      "reviewed_at": "2026-04-06T09:04:11+00:00",
+      "reviewed_contract_sha": "8f685c971ca04b93",
+      "reviewer": "subagent"
     },
     {
       "id": "harness-contract-review",

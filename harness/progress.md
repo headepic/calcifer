@@ -5,6 +5,42 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — when-to-use-skill-field implemented (first real run of new review gate)
+
+Canary feature to exercise the new plan-phase review gate end-to-end. Every stage of the workflow succeeded on first try.
+
+Implementation:
+- SkillDefinition dataclass gained when_to_use: str = '' field (loader.py:49-51)
+- load_skill_file parses both 'when-to-use' and 'when_to_use' frontmatter keys; added both to known_keys so they are consumed and not dumped into metadata (loader.py:82, 89)
+- apply_token_budget appends '(use when: <when_to_use>)' to the description string when set; char budget includes when_to_use length (loader.py:212-216)
+- No changes to the (name, desc) tuple return shape — backward compatible
+
+Tests (7 new in tests/test_skill.py):
+- test_skill_when_to_use_parsing_kebab_case: 'when-to-use' frontmatter key
+- test_skill_when_to_use_parsing_snake_case: 'when_to_use' key
+- test_skill_when_to_use_absent: default empty string
+- test_skill_when_to_use_not_in_metadata: known_keys correctly excludes it from metadata dump
+- test_skill_budget_includes_when_to_use: '(use when: ...)' appears in budget output
+- test_skill_budget_without_when_to_use: skills without the field don't get the annotation
+- test_skill_budget_counts_when_to_use_chars: budget accounting includes when_to_use length (enforces rule 8 footgun closure — a lazy impl that added the field but not the budget char count would fail this test)
+
+Workflow dogfood (first real use of the new review gate):
+
+Step 1 (init.sh): clean tree, 451 tests pass
+Step 2 (pick): wanted canary, explicitly picked when-to-use-skill-field instead of the medium-priority top
+Step 3 (review packet): machine sanity reported all sections present, no TODO, 4 verification commands validate, contract↔features.json in sync, 5 referenced files found (1 claude-code-source intentionally skipped as warn)
+Step 4 (subagent review): fresh-context general-purpose agent worked the 12-rule checklist. Verified rule 3 (symbol doesn't already exist) by reading loader.py:28 and grepping. Verified rule 5 (design matches reality) by reading the exact lines the contract proposed to modify. Verified rule 6 (verification commands will fail before impl and pass after) by mentally simulating. Flagged two non-blocking nits: (a) contract says 429 baseline tests but actual is 451; (b) contract says upstream Claude Code accepts camelCase + snake_case but loadSkillsDir.ts:252 only reads snake_case. Neither affects the implementation. Verdict: approved, high confidence.
+Step 5 (review-record): recorded with reviewer=subagent, notes captured for the history JSONL
+Step 6 (implement): 3 file edits (loader.py dataclass, known_keys + parsing, apply_token_budget), 7 new tests
+Step 7 (verify): 4/4 gate commands passed, cache written
+Step 8 (complete): next
+
+Tests: 451 -> 458 (+7). No regressions.
+
+The review gate was not 'just' a paperwork check — the subagent reviewer's rule-by-rule walkthrough produced the concrete generator note 'ensure the new tests assert on actual parsed values and budget output substring, not just field existence' which I then enforced in test_skill_budget_counts_when_to_use_chars. That test would have caught a lazy impl that added the field but forgot to account for its chars in apply_token_budget — exactly the kind of footgun rule 8 is designed to close.
+
+---
+
 ## 2026-04-06 — Harness contract review mechanism + article alignment
 
 Ported from sdk-refactor branch (commits 908cd4e, 24f19e4, b70c3b6).

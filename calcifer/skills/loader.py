@@ -46,6 +46,10 @@ class SkillDefinition:
     user_invocable: bool = False
     # Conditional activation: only active when matching file paths are touched
     paths: list[str] = field(default_factory=list)
+    # Guidance for when the model should invoke this skill — surfaced in the
+    # skill list alongside description. Accepted from frontmatter as either
+    # `when-to-use` or `when_to_use`.
+    when_to_use: str = ""
     # Extra frontmatter fields
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -80,11 +84,13 @@ def load_skill_file(path: Path) -> SkillDefinition | None:
     known_keys = {
         "name", "description", "allowed-tools", "model", "context",
         "agent", "effort", "user-invocable", "paths",
+        "when-to-use", "when_to_use",
     }
     metadata = {k: v for k, v in frontmatter.items() if k not in known_keys}
 
     allowed_tools = frontmatter.get("allowed-tools", [])
     paths_raw = frontmatter.get("paths", [])
+    when_to_use = frontmatter.get("when-to-use") or frontmatter.get("when_to_use") or ""
 
     return SkillDefinition(
         name=frontmatter.get("name", path.stem),
@@ -98,6 +104,7 @@ def load_skill_file(path: Path) -> SkillDefinition | None:
         effort=frontmatter.get("effort", ""),
         user_invocable=frontmatter.get("user-invocable", False),
         paths=paths_raw if isinstance(paths_raw, list) else [],
+        when_to_use=when_to_use if isinstance(when_to_use, str) else "",
         metadata=metadata,
     )
 
@@ -195,12 +202,20 @@ def apply_token_budget(
     """Generate a token-budgeted skill list for the system prompt.
 
     Returns list of (name, truncated_description) within budget.
+
+    When a skill has `when_to_use` set, it is appended to the description
+    in the form "`description`\\n(use when: `when_to_use`)" so the model
+    gets explicit invocation guidance alongside the description. The
+    when_to_use text shares the same per-entry char budget as description.
     """
     entries: list[tuple[str, str]] = []
     total_chars = 0
 
     for skill in skills.values():
         desc = skill.description[:SKILL_DESCRIPTION_MAX_CHARS]
+        if skill.when_to_use:
+            when = skill.when_to_use[:SKILL_DESCRIPTION_MAX_CHARS]
+            desc = f"{desc}\n(use when: {when})"
         entry_chars = len(skill.name) + len(desc) + 10
         if total_chars + entry_chars > max_chars:
             break
