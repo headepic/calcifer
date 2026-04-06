@@ -140,3 +140,92 @@ def test_license_file_exists():
     # Sanity check it actually looks like an MIT license
     assert "MIT License" in text, "LICENSE doesn't contain 'MIT License' header"
     assert "Permission is hereby granted" in text, "LICENSE missing MIT permission clause"
+
+
+# ────────────────────────────────────────────────────────────────────
+# Public API surface lockdown (sdk-public-api-audit)
+# ────────────────────────────────────────────────────────────────────
+
+# THE canonical list of names calcifer commits to keeping stable.
+# Editing this set is a SEMVER EVENT — see docs/public-api.md.
+# This snapshot test fails if `calcifer.__all__` drifts; the
+# contributor must update __all__, this set, AND docs/public-api.md
+# in the same commit.
+_EXPECTED_PUBLIC_API: frozenset[str] = frozenset({
+    # Core (4)
+    "Agent", "AgentResult", "CalciferConfig", "MCPServerConfig",
+    # Tool API (7)
+    "Tool", "FunctionTool", "ToolContext", "ToolResult",
+    "ValidationResult", "tool", "find_tool_by_name",
+    # Tool registry (3)
+    "get_all_builtin_tools", "get_tools", "assemble_tool_pool",
+    # Messages (5)
+    "Message", "ToolCall", "Usage", "StreamEvent", "APIErrorType",
+    # Errors (1)
+    "LLMProviderError",
+    # Settings (1)
+    "load_settings",
+    # Provisional: Multi-agent (2)
+    "Coordinator", "CoordinatorConfig",
+    # Provisional: Context (1)
+    "ContextManager",
+    # Provisional: Hooks (3)
+    "HookManager", "HookConfig", "HookEvent",
+    # Provisional: Transport (1)
+    "LLMProvider",
+    # Lower priority (3)
+    "CostTracker", "MetricsManager", "run_tools",
+})
+
+
+def test_public_api_surface():
+    """Snapshot test: calcifer.__all__ matches the documented public API.
+
+    On failure, the contributor must update __all__, this test's
+    _EXPECTED_PUBLIC_API constant, AND docs/public-api.md in the
+    same commit. Three coordinated edits = an intentional change.
+    """
+    import calcifer
+    actual = set(calcifer.__all__)
+    expected = set(_EXPECTED_PUBLIC_API)
+    assert actual == expected, (
+        f"calcifer.__all__ has drifted from the documented public API.\n"
+        f"  Added (in __all__ but not expected):   "
+        f"{sorted(actual - expected)}\n"
+        f"  Removed (expected but not in __all__): "
+        f"{sorted(expected - actual)}\n"
+        f"Update _EXPECTED_PUBLIC_API in this test AND docs/public-api.md\n"
+        f"in the same commit if the change is intentional."
+    )
+
+
+def test_public_api_importable():
+    """Every name in __all__ must be a real, non-None attribute."""
+    import calcifer
+    for name in calcifer.__all__:
+        obj = getattr(calcifer, name, None)
+        assert obj is not None, (
+            f"calcifer.__all__ lists {name!r} but it is missing or None"
+        )
+
+
+def test_public_api_documented_in_md():
+    """Every public name must appear in docs/public-api.md.
+
+    Closes the doc-stub footgun: a doc with just the three section
+    headers ("Stable", "Provisional", "Internal") would pass the
+    section grep but fails this content check, because none of the
+    actual names appear in it.
+    """
+    import calcifer
+    md_path = ROOT / "docs" / "public-api.md"
+    assert md_path.exists(), f"docs/public-api.md missing at {md_path}"
+    md_text = md_path.read_text(encoding="utf-8")
+
+    missing = [name for name in calcifer.__all__ if name not in md_text]
+    assert not missing, (
+        f"docs/public-api.md does not mention {len(missing)} public name(s):\n"
+        f"  {missing}\n"
+        f"Every name in calcifer.__all__ must appear (case-sensitive) in "
+        f"docs/public-api.md."
+    )

@@ -5,6 +5,12 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-public-api-audit implemented
+
+Locked the public API surface at 31 names with snapshot test + docs/public-api.md. Round 1 was changes_requested (count drift 28→31 + doc-stub footgun); round 2 approved after fixing both. New test_public_api_documented_in_md asserts every name in __all__ appears in the doc. Mock tests 470 → 473 (+3).
+
+---
+
 ## 2026-04-06 — sdk-agent-run-sync implemented
 
 Added Agent.run_sync() — thin sync wrapper around run() using asyncio.run. Detects 'inside running loop' via asyncio.get_running_loop() and raises RuntimeError with 'cannot be called from inside' message. 2 new tests in test_p0.py. Mock tests 468 → 470 (+2).

@@ -481,20 +481,22 @@
         "All 434 mock tests still pass"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from pathlib import Path; p = Path('docs/public-api.md'); assert p.exists(), 'docs/public-api.md missing'; t = p.read_text(); assert 'Stable' in t and 'Provisional' in t and 'Internal' in t, 'public-api.md missing required sections'\"",
+        ".venv/bin/python -c \"import calcifer; assert hasattr(calcifer, '__all__') and len(calcifer.__all__) == 31, f'__all__ should have exactly 31 names, got {len(calcifer.__all__)}'\"",
+        ".venv/bin/python -m pytest tests/test_packaging.py -q -k 'public_api_surface or public_api_importable or public_api_documented_in_md'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "Semver + Python __all__ convention.",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "325bf54a464368db6f144ec96a98cce33ce78f90",
+      "verified_tree": "cdb5c262924eeb94",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Round 2 approved. Both round-1 issues fixed: (a) count drift to 31 verified — Design enumerates all 31 names verbatim, AC and verify cmd2 use ==31; (b) doc-content footgun closed via new test_public_api_documented_in_md that asserts every name in __all__ appears as substring in docs/public-api.md. Verified __all__ has exactly 31 entries by reading calcifer/__init__.py directly.",
+      "reviewed_at": "2026-04-06T12:25:55+00:00",
+      "reviewed_contract_sha": "fad49454d50c15d6",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-testing-module",
