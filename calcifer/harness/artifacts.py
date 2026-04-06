@@ -37,7 +37,10 @@ class Feature:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> Feature:
+    def from_dict(cls, d: dict[str, Any]) -> Feature | None:
+        """Build Feature from dict. Returns None if required fields are missing."""
+        if not isinstance(d, dict) or not d.get("description"):
+            return None
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -78,7 +81,7 @@ class FeatureList:
         features = []
         for i, item in enumerate(data):
             f = Feature.from_dict(item) if isinstance(item, dict) else None
-            if f and f.description:
+            if f is not None:
                 features.append(f)
             else:
                 logger.warning("Feature list %s: dropping corrupt entry at index %d", path, i)
