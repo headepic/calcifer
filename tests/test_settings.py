@@ -64,3 +64,76 @@ def test_load_settings_with_overrides():
         )
         assert config.model == "claude-3-5-sonnet"
         assert config.max_tokens == 4096
+
+
+# ────────────────────────────────────────────────────────────────────
+# base_url resolver tests (sdk-config-env-defaults)
+# ────────────────────────────────────────────────────────────────────
+
+
+def test_config_base_url_default_is_none():
+    """CalciferConfig.base_url default is None — Agent resolves it at init."""
+    from calcifer.config import CalciferConfig
+    cfg = CalciferConfig()
+    assert cfg.base_url is None, (
+        f"base_url default should be None, got {cfg.base_url!r}"
+    )
+
+
+def test_config_base_url_explicit_wins(monkeypatch):
+    """Explicit kwarg beats both env var and canonical fallback."""
+    from calcifer import Agent
+
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://env.example.com/v1")
+    agent = Agent(base_url="https://explicit.example.com/v1", api_key="x")
+    try:
+        assert agent._config.base_url == "https://explicit.example.com/v1"
+    finally:
+        # close() is async, so just drop the reference; tests don't await
+        pass
+
+
+def test_config_base_url_env_fallback(monkeypatch):
+    """When kwarg is None and OPENAI_BASE_URL is set, env wins over fallback."""
+    from calcifer import Agent
+
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://env.example.com/v1")
+    agent = Agent(api_key="x")
+    assert agent._config.base_url == "https://env.example.com/v1"
+
+
+def test_config_base_url_canonical_fallback(monkeypatch):
+    """When neither kwarg nor env is set, fall back to api.openai.com."""
+    from calcifer import Agent
+
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    agent = Agent(api_key="x")
+    assert agent._config.base_url == "https://api.openai.com/v1"
+
+
+def test_resolve_base_url_unit():
+    """Direct unit test of the _resolve_base_url helper."""
+    from calcifer.agent import _resolve_base_url
+    import os
+
+    # Save and restore env
+    saved = os.environ.pop("OPENAI_BASE_URL", None)
+    try:
+        # Explicit wins over everything
+        assert _resolve_base_url("https://explicit.test/v1") == "https://explicit.test/v1"
+
+        # No env, no explicit → canonical fallback
+        assert _resolve_base_url(None) == "https://api.openai.com/v1"
+        assert _resolve_base_url("") == "https://api.openai.com/v1"
+
+        # Env set, no explicit → env wins
+        os.environ["OPENAI_BASE_URL"] = "https://env.test/v1"
+        assert _resolve_base_url(None) == "https://env.test/v1"
+
+        # Env set + explicit → explicit wins
+        assert _resolve_base_url("https://override.test/v1") == "https://override.test/v1"
+    finally:
+        if saved is not None:
+            os.environ["OPENAI_BASE_URL"] = saved
+        else:
+            os.environ.pop("OPENAI_BASE_URL", None)

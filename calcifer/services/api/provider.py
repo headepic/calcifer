@@ -71,7 +71,7 @@ class LLMProvider:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "http://127.0.0.1:8317/v1",
+        base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o",
         max_tokens: int = 8192,
         temperature: float = 0.0,

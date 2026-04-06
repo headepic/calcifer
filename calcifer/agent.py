@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable
 from uuid import uuid4
@@ -54,6 +55,27 @@ DIMINISHING_THRESHOLD = 500
 DIMINISHING_TURNS = 3
 COMPLETION_THRESHOLD = 0.9
 
+# Canonical OpenAI public endpoint, used as the final fallback when neither
+# an explicit base_url nor OPENAI_BASE_URL env var is set.
+_OPENAI_FALLBACK_BASE_URL = "https://api.openai.com/v1"
+
+
+def _resolve_base_url(explicit: str | None) -> str:
+    """Resolve the LLM base URL using the standard SDK precedence chain.
+
+    Order:
+      1. Explicit value from constructor / config (if truthy)
+      2. OPENAI_BASE_URL environment variable (if set and truthy)
+      3. Canonical OpenAI public endpoint
+
+    The returned value is always a non-empty string. Used by Agent.__init__
+    to write a real URL into self._config.base_url before LLMProvider is
+    constructed.
+    """
+    if explicit:
+        return explicit
+    return os.environ.get("OPENAI_BASE_URL") or _OPENAI_FALLBACK_BASE_URL
+
 
 @dataclass
 class AgentResult:
@@ -78,7 +100,7 @@ class Agent:
         config: CalciferConfig | None = None,
         *,
         api_key: str = "",
-        base_url: str = "http://127.0.0.1:8317/v1",
+        base_url: str | None = None,
         model: str = "gpt-4o",
         max_tokens: int = 8192,
         temperature: float = 0.0,
@@ -98,6 +120,12 @@ class Agent:
                 max_turns=max_turns,
                 system_prompt=system_prompt,
             )
+
+        # Resolve base_url via the env-fallback chain BEFORE constructing
+        # LLMProvider. After this point, self._config.base_url is always a
+        # real string (never None) — any later code reading the config sees
+        # the resolved value.
+        self._config.base_url = _resolve_base_url(self._config.base_url)
 
         self._tools: list[Tool] = list(tools or [])
         self._tools_by_name: dict[str, Tool] = {t.name: t for t in self._tools}

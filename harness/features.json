@@ -288,20 +288,22 @@
         "All existing tests still pass (update any that relied on the old default)"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from calcifer.config import CalciferConfig; import dataclasses; f = next(x for x in dataclasses.fields(CalciferConfig) if x.name == 'base_url'); assert f.default is None, f'base_url default should be None, got {f.default!r}'\"",
+        ".venv/bin/python -c \"import subprocess; r = subprocess.run(['grep', '-rn', '127.0.0.1:8317', 'calcifer/'], capture_output=True, text=True); assert r.returncode != 0 or not r.stdout.strip(), f'127.0.0.1:8317 still in calcifer/: {r.stdout}'\"",
+        ".venv/bin/python -m pytest tests/ -q -k 'config_base_url_explicit_wins or config_base_url_env_fallback or config_base_url_canonical_fallback'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "Standard 12-factor config. No Claude Code analog.",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "d044addc9ba920c933b5cea8d20fe4fd766a18ad",
+      "verified_tree": "4dc542adfeea4cc2",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Approved (high confidence). Cross-checked all 4 line numbers (config.py:27, agent.py:81, provider.py:74, executor.py:56) — exact match with current source. Verified _resolve_base_url and OPENAI_BASE_URL don't exist anywhere in calcifer/. Non-goal of leaving LLMProvider default as a literal (not None+resolver) is coherent — resolver belongs at the public Agent surface, transport should fail loudly on None. Generator note: write resolved value back to self._config.base_url BEFORE the LLMProvider(...) call at agent.py:114 so the provider receives a real string.",
+      "reviewed_at": "2026-04-06T10:23:06+00:00",
+      "reviewed_contract_sha": "8106edca81b48660",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-agent-run-sync",

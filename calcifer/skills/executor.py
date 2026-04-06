@@ -53,7 +53,7 @@ async def run_skill_fork(
     available_tools: list[Tool],
     *,
     api_key: str = "",
-    base_url: str = "http://127.0.0.1:8317/v1",
+    base_url: str | None = None,
     model: str | None = None,
 ) -> str:
     """Run a skill in fork mode — isolated sub-agent.

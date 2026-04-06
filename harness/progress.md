@@ -5,6 +5,36 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-config-env-defaults implemented (env-driven base_url resolution)
+
+Replaces the historical 'http://127.0.0.1:8317/v1' default — a private local LLM gateway from early development — with the standard SDK env-fallback chain: explicit kwarg > OPENAI_BASE_URL env var > 'https://api.openai.com/v1' canonical fallback.
+
+Implementation:
+- calcifer/config.py: CalciferConfig.base_url annotation changed to 'str | None' with default None
+- calcifer/agent.py: added module-level _OPENAI_FALLBACK_BASE_URL constant and _resolve_base_url() helper. Agent.__init__ kwarg default changed to None and the resolver is called immediately after CalciferConfig is built, BEFORE LLMProvider is constructed (so the provider always receives a real string)
+- calcifer/services/api/provider.py: kwarg default changed from localhost to 'https://api.openai.com/v1' (LLMProvider is the low-level transport — no resolver here, but the literal is at least correct now)
+- calcifer/skills/executor.py: run_skill_fork's base_url kwarg default changed to None (flows through to CalciferConfig → Agent.__init__ → resolver)
+- 4 hardcoded localhost references in calcifer/ removed; e2e tests in tests/test_e2e_*.py and examples/e2e_test.py keep their explicit base_url since they need a specific gateway
+
+Tests (5 new in tests/test_settings.py):
+- test_config_base_url_default_is_none — confirms field default is None
+- test_config_base_url_explicit_wins — explicit kwarg beats env var
+- test_config_base_url_env_fallback — env var beats canonical fallback
+- test_config_base_url_canonical_fallback — neither set → api.openai.com
+- test_resolve_base_url_unit — direct unit test of the helper covering all 4 paths (explicit, empty string, env-only, env-then-explicit)
+
+Workflow:
+- Plan: filled in the stub contract with concrete file:line references and a 5-paragraph design section. Reviewer specifically asked about backward compat (acknowledged as a deliberate breaking change in the contract) and the LLMProvider non-goal (coherent layering decision).
+- Review: fresh-context subagent verified all 4 source line numbers exactly, confirmed _resolve_base_url and OPENAI_BASE_URL don't exist anywhere in calcifer/, mentally simulated all 4 verification commands. Verdict: approved, high confidence.
+- Generator note from reviewer: 'write resolved value back to self._config.base_url BEFORE the LLMProvider(...) call at agent.py:114 so the provider receives a real string'. Followed exactly.
+- Verify: 4/4 gate commands pass.
+
+Mock tests: 460 → 465 (+5). No regressions.
+
+This is a deliberate breaking change for any user who relied on the localhost default (which should have been zero, since the default was wrong for everyone except the original developer). CHANGELOG entry will be added in sdk-changelog-semver.
+
+---
+
 ## 2026-04-06 — sdk-py-typed-marker implemented (first SDK feature on rebased branch)
 
 First feature implemented after rebasing sdk-refactor onto main. Rebase merged 6 commits into main's reality (5 dropped as already-upstream, 1 conflict resolved on features.json by appending 17 SDK features to main's 6).

@@ -24,7 +24,11 @@ class CalciferConfig:
 
     # LLM provider
     api_key: str = ""
-    base_url: str = "http://127.0.0.1:8317/v1"
+    # base_url default is None (not a hardcoded URL). The Agent constructor
+    # resolves it via os.environ["OPENAI_BASE_URL"] then falls back to the
+    # canonical "https://api.openai.com/v1", and writes the resolved value
+    # back here before LLMProvider is constructed.
+    base_url: str | None = None
     model: str = "gpt-4o"
     max_tokens: int = 8192
     temperature: float = 0.0
