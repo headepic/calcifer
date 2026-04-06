@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "description": "Calcifer feature backlog. Only harness.py complete modifies passes. All other fields require explicit commit.",
+  "features": [
+    {
+      "id": "mcp-auth-refresh",
+      "title": "MCP auth token refresh callback",
+      "category": "mcp",
+      "priority": "medium",
+      "description": "Allow long-running sessions to recover from expired MCP auth tokens via a user-provided refresh callback.",
+      "motivation": "Sessions >30min that connect to OAuth-protected MCP servers currently break on 401. Claude Code handles this with checkAndRefreshOAuthTokenIfNeeded + handleOAuth401Error. Calcifer has no equivalent — the agent crashes mid-session.",
+      "acceptance_criteria": [
+        "MCPClient accepts an optional on_auth_error callback",
+        "401/403 responses trigger the callback with the server name",
+        "Callback can return new headers (dict) or None",
+        "If new headers returned, request is retried once with them",
+        "If callback is None or returns None, original behavior (raise) preserved",
+        "New tests in tests/test_mcp.py cover the refresh + retry path",
+        "All existing mock tests still pass"
+      ],
+      "verification": [
+        "grep -q 'on_auth_error' calcifer/services/mcp/client.py",
+        ".venv/bin/python -m pytest tests/test_mcp.py -q -k 'auth_refresh'",
+        ".venv/bin/python -m pytest tests/test_mcp.py -q",
+        ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
+      ],
+      "reference": "claude-code-source/src/services/mcp/client.ts:363-421 (checkAndRefreshOAuthTokenIfNeeded, handleOAuth401Error)",
+      "status": "pending",
+      "passes": false
+    },
+    {
+      "id": "stop-hook-inject-continue",
+      "title": "Stop hooks can inject messages and continue",
+      "category": "agent-loop",
+      "priority": "medium",
+      "description": "Allow stop hooks to return a structured result: either stop the loop, or inject messages and continue.",
+      "motivation": "Claude Code's handleStopHooks can return blockingErrors that get injected as messages while the loop continues — used for budget warnings, content filter corrections, etc. Calcifer's stop hooks can only return bool (stop/not-stop). This limits extensibility.",
+      "acceptance_criteria": [
+        "New StopHookResult dataclass with fields: stop (bool), inject_messages (list[Message])",
+        "Stop hooks can return either bool (backward compat) or StopHookResult",
+        "If inject_messages is non-empty, messages are appended to conversation before the next turn",
+        "If stop is True, loop breaks after injection (current turn still emits turn_end)",
+        "New test covers inject-and-continue path",
+        "Existing stop-hook tests (bool return) still pass"
+      ],
+      "verification": [
+        "grep -q 'StopHookResult' calcifer/agent.py",
+        ".venv/bin/python -m pytest tests/ -q -k 'stop_hook_inject'",
+        ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
+      ],
+      "reference": "claude-code-source/src/query/stopHooks.ts:64-250 (handleStopHooks, blockingErrors, preventContinuation)",
+      "status": "pending",
+      "passes": false
+    },
+    {
+      "id": "abort-reason-tracking",
+      "title": "Abort signal with reason",
+      "category": "agent-loop",
+      "priority": "low",
+      "description": "Replace the bare asyncio.Event abort signal with a reason-aware signal distinguishing user interrupt from sibling error propagation.",
+      "motivation": "Claude Code's AbortController carries a reason field (interrupt, sibling_error, streaming_fallback) used for debugging and synthetic error messages. Calcifer's single Event loses this distinction — tools all see the same opaque 'aborted' state.",
+      "acceptance_criteria": [
+        "New AbortReason enum (user_interrupt, sibling_error, timeout, other)",
+        "Agent.abort() accepts an optional reason argument (defaults to user_interrupt)",
+        "ToolContext.abort_reason field populated when abort_signal is True",
+        "Tool result messages for aborted tools include the reason",
+        "Backward-compat: bool abort_signal still works; existing tests pass"
+      ],
+      "verification": [
+        "grep -q 'class AbortReason' calcifer/types/tools.py",
+        ".venv/bin/python -m pytest tests/ -q -k 'abort_reason'",
+        ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
+      ],
+      "reference": "claude-code-source/src/services/tools/StreamingToolExecutor.ts:153-318 (abort reasons + sibling AbortController)",
+      "status": "pending",
+      "passes": false
+    },
+    {
+      "id": "pre-post-tool-hooks",
+      "title": "Pre and post tool execution hooks",
+      "category": "tools",
+      "priority": "low",
+      "description": "Add pre-tool and post-tool hook points to the execution pipeline for extensibility (logging, validation, mutation).",
+      "motivation": "Claude Code has runPreToolUseHooks and runPostToolUseHooks run around every tool call. Enables features like audit logging, content filtering, or input rewriting without touching tool code. Calcifer currently has no extension point between validate and call.",
+      "acceptance_criteria": [
+        "New HookManager.on_pre_tool and HookManager.on_post_tool registration methods",
+        "Pre-tool hooks run after validation, before tool.call()",
+        "Pre-tool hooks can veto execution (return False) or mutate input (return dict)",
+        "Post-tool hooks run after tool.call() with the ToolResult",
+        "Post-tool hooks can mutate the result (return ToolResult)",
+        "Hook failures are logged but do not crash the tool call",
+        "New tests cover pre-veto, pre-mutate, post-mutate, and hook failure paths"
+      ],
+      "verification": [
+        "grep -q 'PRE_TOOL_USE' calcifer/services/hooks.py",
+        ".venv/bin/python -m pytest tests/ -q -k 'pre_tool_hook or post_tool_hook'",
+        ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
+      ],
+      "reference": "claude-code-source/src/services/tools/toolExecution.ts:599-900 (runPreToolUseHooks, runPostToolUseHooks)",
+      "status": "pending",
+      "passes": false
+    },
+    {
+      "id": "when-to-use-skill-field",
+      "title": "Skill when_to_use frontmatter field",
+      "category": "skills",
+      "priority": "low",
+      "description": "Add when_to_use frontmatter field to skill definitions, surfaced in the skill list prompt so the LLM knows when to invoke each skill.",
+      "motivation": "Claude Code skills have a when_to_use field that tells the model when each skill is relevant. Calcifer currently only has description, which is often too terse. Adding when_to_use improves skill selection without adding a new concept.",
+      "acceptance_criteria": [
+        "SkillDefinition has a when_to_use field (str, default empty)",
+        "load_skill_file parses when-to-use from frontmatter",
+        "apply_token_budget includes when_to_use in the entry when present",
+        "Existing skills without when_to_use still load correctly",
+        "New test verifies when_to_use parsing and budget inclusion"
+      ],
+      "verification": [
+        "grep -q 'when_to_use' calcifer/skills/loader.py",
+        ".venv/bin/python -m pytest tests/ -q -k 'when_to_use'",
+        ".venv/bin/python -m pytest tests/test_skill.py tests/test_skill_full.py -q",
+        ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
+      ],
+      "reference": "claude-code-source/src/skills/loadSkillsDir.ts:185-265 (whenToUse frontmatter parsing)",
+      "status": "pending",
+      "passes": false
+    }
+  ]
+}
