@@ -229,3 +229,69 @@ def test_public_api_documented_in_md():
         f"Every name in calcifer.__all__ must appear (case-sensitive) in "
         f"docs/public-api.md."
     )
+
+
+# ────────────────────────────────────────────────────────────────────
+# CHANGELOG + semver policy doc (sdk-changelog-semver)
+# ────────────────────────────────────────────────────────────────────
+
+
+def test_changelog_exists_and_has_v030_entry():
+    """CHANGELOG.md must exist with a populated [0.3.0] section.
+
+    Enforces: keep-a-changelog header reference, a `## [0.3.0]`
+    heading, at least 5 bullet entries (`- `) inside the v0.3.0
+    section, and at least 2 distinct `### ` category headings
+    (e.g. Added + Changed). This matches the contract's AC.
+    """
+    changelog = ROOT / "CHANGELOG.md"
+    assert changelog.exists(), f"CHANGELOG.md missing at {changelog}"
+    text = changelog.read_text(encoding="utf-8")
+
+    lower = text.lower()
+    assert "keepachangelog" in lower or "keep a changelog" in lower, (
+        "CHANGELOG header should reference keep-a-changelog"
+    )
+
+    assert "## [0.3.0]" in text, "CHANGELOG missing '## [0.3.0]' section"
+
+    # Slice out the v0.3.0 section: from its heading to the next `## [`
+    start = text.index("## [0.3.0]")
+    rest = text[start + len("## [0.3.0]"):]
+    next_section = rest.find("\n## [")
+    section = rest if next_section == -1 else rest[:next_section]
+
+    bullet_lines = [ln for ln in section.splitlines() if ln.startswith("- ")]
+    assert len(bullet_lines) >= 5, (
+        f"v0.3.0 section has only {len(bullet_lines)} bullet entries; "
+        f"contract requires at least 5"
+    )
+
+    categories = {
+        ln.strip() for ln in section.splitlines() if ln.startswith("### ")
+    }
+    assert len(categories) >= 2, (
+        f"v0.3.0 section has only {len(categories)} '### ' category "
+        f"heading(s); contract requires at least 2 (e.g. Added + Changed). "
+        f"Found: {sorted(categories)}"
+    )
+
+
+def test_semver_policy_doc_exists():
+    """docs/semver.md must exist and reference public-api.md.
+
+    Also asserts the doc enumerates Major/Minor/Patch triggers so a
+    stub doc can't pass.
+    """
+    semver_md = ROOT / "docs" / "semver.md"
+    assert semver_md.exists(), f"docs/semver.md missing at {semver_md}"
+    text = semver_md.read_text(encoding="utf-8")
+
+    assert "public-api.md" in text, (
+        "docs/semver.md must reference docs/public-api.md "
+        "(it's the source of public-API names)"
+    )
+    for trigger in ("Major", "Minor", "Patch"):
+        assert trigger in text, (
+            f"docs/semver.md missing version-bump trigger heading: {trigger}"
+        )

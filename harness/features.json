@@ -707,20 +707,22 @@
         "README.md links to CHANGELOG and semver policy"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from pathlib import Path; p = Path('CHANGELOG.md'); assert p.exists(), 'CHANGELOG.md missing'; t = p.read_text(); assert '## [0.3.0]' in t, 'CHANGELOG missing v0.3.0 section'; assert 'keepachangelog' in t.lower() or 'keep a changelog' in t.lower(), 'CHANGELOG header should reference keep-a-changelog'\"",
+        ".venv/bin/python -c \"from pathlib import Path; p = Path('docs/semver.md'); assert p.exists(), 'docs/semver.md missing'; t = p.read_text(); assert 'public-api.md' in t, 'semver.md should reference public-api.md'; assert 'Major' in t and 'Minor' in t and 'Patch' in t, 'semver.md missing version-bump triggers'\"",
+        ".venv/bin/python -m pytest tests/test_packaging.py -q -k 'changelog_exists_and_has_v030_entry or semver_policy_doc_exists'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "keepachangelog.com + semver.org",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "c17166a501003827cc6bfd3ea4a0be4457fc5af7",
+      "verified_tree": "24480323bd11674c",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Round 2 approved: scope now trims public-api.md's semver/propose sections to one-line pointers; test spec enforces >=5 bullets across >=2 distinct ### categories matching AC.",
+      "reviewed_at": "2026-04-06T12:34:17+00:00",
+      "reviewed_contract_sha": "c45c7e2272e6ffd5",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-github-actions-ci",

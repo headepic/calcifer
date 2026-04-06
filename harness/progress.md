@@ -5,6 +5,12 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-changelog-semver: CHANGELOG.md + docs/semver.md
+
+Added keep-a-changelog format CHANGELOG with [0.3.0] section listing all SDK release work since v0.2.0. New docs/semver.md is now canonical for semver policy; trimmed duplicate sections from docs/public-api.md to a one-line pointer. Two new packaging tests enforce v0.3.0 entry shape (>=5 bullets, >=2 categories) and semver doc structure.
+
+---
+
 ## 2026-04-06 — sdk-public-api-audit implemented
 
 Locked the public API surface at 31 names with snapshot test + docs/public-api.md. Round 1 was changes_requested (count drift 28→31 + doc-stub footgun); round 2 approved after fixing both. New test_public_api_documented_in_md asserts every name in __all__ appears in the doc. Mock tests 470 → 473 (+3).

@@ -139,24 +139,6 @@ change, behavior may shift.
 
 ## Semver policy
 
-Calcifer follows [Semantic Versioning](https://semver.org/):
-
-- **Major (1.0 → 2.0)**: removing or renaming any name in this
-  document, or changing the type signature of any **Stable** name in
-  a way that breaks existing code.
-- **Minor (0.3 → 0.4)**: adding new names; changing **Provisional**
-  names (with a CHANGELOG entry); deprecating Stable names with a
-  warning that lasts at least one minor version.
-- **Patch (0.3.0 → 0.3.1)**: bug fixes that don't change the
-  documented behavior of any Stable or Provisional name.
-
-## How to propose changes
-
-If you want to add or remove a name from `__all__`:
-
-1. Edit `calcifer/__init__.py` `__all__` list
-2. Edit this document (`docs/public-api.md`) to match
-3. Edit `tests/test_packaging.py` `_EXPECTED_PUBLIC_API` constant
-4. The snapshot test `test_public_api_surface` will pass only if
-   all three are in sync — that's intentional. Three coordinated
-   edits = an intentional, reviewed change.
+See [`docs/semver.md`](semver.md) for the canonical semver policy
+(version-bump triggers, deprecation rules, and the 3-step procedure
+for changing the public API).
