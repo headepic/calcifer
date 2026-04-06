@@ -5,6 +5,40 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — Harness contract review mechanism + article alignment
+
+Ported from sdk-refactor branch (commits 908cd4e, 24f19e4, b70c3b6).
+
+Major harness additions:
+- harness.py review + review-record + review-miss subcommands
+- Feature.reviewer field; reviewer='self' rejected for non-bootstrap features
+- Review gate on verify/complete (review_status == approved AND contract_sha match)
+- --skip-review REASON escape hatch
+- Feature.phase derived property (plan_stub → plan_drafting → plan_review → generating → verifying → done)
+- cmd_pick skips stub features (cmd_add placeholder verify) and surfaces them as BACKLOG NEEDS PLANNING
+- validate_and_parse_verify_command rejects the PLACEHOLDER_VERIFY sentinel
+- _machine_sanity checks contract ↔ features.json verification drift
+- harness/reviewer-checklist.md loaded at runtime (was a Python string literal)
+- harness/reviews/<id>.jsonl append-only review history (cmd_reset does not clear)
+- cmd_review_miss records calibration events
+
+Doc updates:
+- README.md rewritten with Plan → Generate → Verify three-phase workflow
+- CLAUDE.md workflow steps now show review gate (was 10 steps, now 13)
+- Hard rules now include: reviewer=self rejection, double gate, reviews append-only, stub unpickable
+- 'For why we don't copy the articles verbatim' section rewritten: the evaluator/generator split IS now enforced, just via the --reviewer gate rather than separate agent processes
+
+Bootstrap:
+- harness-contract-review was self-reviewed (reviewer=self, in _BOOTSTRAP_SELF_REVIEW_ALLOWED)
+- Then reviewed round-by-round by subagents (4 bug rounds + 2 article-alignment rounds)
+- Round 2 article-aligned review: PASS_WITH_MINOR_FIXES verdict, all minor items applied
+
+Tests: test_harness_review.py with 17 tests (all passing in the sdk-refactor worktree). Mock test suite unaffected.
+
+SDK refactor work (17 features) stays on sdk-refactor branch and will be worked on separately from main.
+
+---
+
 ## 2026-04-06 — mcp-auth-refresh implemented
 
 First feature shipped through the harness workflow.

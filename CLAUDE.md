@@ -19,31 +19,54 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
 
 ## 会话工作流（强制）
 
-任何新功能都必须经过以下流程：
+任何新功能都必须经过 **Plan → Generate → Verify** 三阶段。Plan 阶段结束
+时 **必须** 由独立 reviewer 审议合约，reviewer 不能是当前 session
+（fresh-context Agent subagent / 人工 / external）。
 
 ```
-1. 启动检查：    ./harness/init.sh
-2. 看状态：      python harness/harness.py status
-3. 检查未完成：  python harness/harness.py resume
-                (如有 in_progress feature，先完成它们)
-4. 选 feature：  python harness/harness.py pick
-5. 读合约：      cat harness/contracts/<feature-id>.md
-                (不存在则 python harness/harness.py add <id> 先生成)
-6. 实现（只改一个 feature）
-7. 验证：        python harness/harness.py verify <feature-id>
-                (allow-listed 命令 + 600s 超时 + 写 verified_sha/verified_tree)
-8. 追加日志：    python harness/harness.py log "<id>: summary" --body "..."
-                (或手动在 progress.md 顶部追加)
-9. 标记完成：    python harness/harness.py complete <feature-id>
-                (需 cache 命中或 re-verify + progress.md 有待提交的追加)
-10. 提交：       git commit -m 'feat(area): implement <feature-id>'
+# ── Plan ──
+1.  启动检查：    ./harness/init.sh
+2.  看状态：      python harness/harness.py status
+                  (按 phase 分组：plan_stub/plan_drafting/plan_review/generating/verifying/done/blocked)
+3.  检查未完成：  python harness/harness.py resume
+4.  选 feature：  python harness/harness.py pick
+                  (自动跳过 plan_stub；把它们归到 BACKLOG NEEDS PLANNING)
+5.  写/读合约：   cat harness/contracts/<feature-id>.md
+                  (不存在则 python harness/harness.py add <id> 先生成 stub)
+6.  生成 review packet:
+                  python harness/harness.py review <feature-id>
+                  (打印到 stdout：contract + features.json + machine sanity + checklist + 历史)
+7.  独立 reviewer 审议:
+                  把 packet 交给 fresh-context Agent subagent (或人工)
+                  获取 verdict + notes
+8.  记录 verdict:
+                  python harness/harness.py review-record <feature-id> \
+                    --reviewer subagent --status approved --notes "..."
+                  (reviewer=self 非 bootstrap 会被拒绝；
+                   changes_requested → 回第 5 步编辑合约再走 6-8；
+                   SHA 变化会强制 re-review)
+
+# ── Generate ──
+9.  实现（只改一个 feature，小步 commit）
+
+# ── Verify ──
+10. 跑验证：      python harness/harness.py verify <feature-id>
+                  (双 gate：review_status == approved AND 验证命令全过)
+11. 追加日志：    python harness/harness.py log "<id>: summary" --body "..."
+                  (或 review-miss <id> --what "..." 记录 reviewer 漏过的事)
+12. 标记完成：    python harness/harness.py complete <feature-id>
+                  (cache 命中则跳过 re-verify；progress.md 必须 append-only diff 通过)
+13. 提交：        git commit -m 'feat(area): implement <feature-id>'
 ```
 
 ### 异常子命令
 
 - **半成品接着做**：`python harness/harness.py resume`（列出 in_progress）
 - **Feature 卡住了**：`python harness/harness.py block <id> --reason "..."`
-- **卡住后重新开始**：`python harness/harness.py reset <id>`（清 verified_sha/verified_tree/blocked_reason）
+- **卡住后重新开始**：`python harness/harness.py reset <id>`
+  （清 verified_sha/verified_tree/review 缓存；**不**清 reviews/ 历史）
+- **Reviewer 漏了事**：`python harness/harness.py review-miss <id> --what "..."`
+  （append 到 reviews/<id>.jsonl 作为 calibration corpus；然后更新 reviewer-checklist.md）
 
 ## 硬性规则
 
@@ -51,15 +74,27 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
 2. **先写合约，再写代码**。没有合约的 feature 不允许开始实现。
    - 新 feature：`python harness/harness.py add <id>` 生成 stub 合约
    - 然后填写 `harness/contracts/<id>.md` 的所有小节
-   - commit 合约后才能开始实现
-3. **验证是硬性 gate**。`verify` 命令不过就不允许 `complete`。
-   - `complete` 会校验 verified_sha AND verified_tree — 如果 working tree 变了会强制 re-verify
+   - commit 合约后才能开始 review 流程
+3. **合约必须通过独立 reviewer**。plan 阶段结束后 `harness.py review-record`
+   的 `--reviewer` 不能是 `self`（`_BOOTSTRAP_SELF_REVIEW_ALLOWED` 例外除外）。
+   - Reviewer 应当是 fresh-context subagent（通过 Agent 工具）或人工
+   - 自审 = 违反 Article 2 的 evaluator/generator 分离原则
+4. **双 gate 才能 complete**。`review_status == "approved"` AND
+   verify 命令全过才能标记 done。
+   - `complete` 会校验 verified_sha AND verified_tree — working tree 变了强制 re-verify
+   - 合约文件编辑过 → reviewed_contract_sha 不匹配 → 强制 re-review
    - Blocked feature 不能 complete，必须先 `reset`
-4. **不要删除或修改已有测试**，除非合约明确说要重构该测试。
-5. **不要修改 `features.json` 的字段**（`harness.py complete/verify/block/reset` 除外）。
-6. **`progress.md` 是 append-only**。只在顶部追加新条目，永远不要编辑或删除旧条目。
+5. **不要删除或修改已有测试**，除非合约明确说要重构该测试。
+6. **不要修改 `features.json` 的字段**，只允许以下命令写：
+   `complete / verify / block / reset / review-record`。
+7. **`progress.md` 是 append-only**。只在顶部追加新条目，永远不要编辑或删除旧条目。
    - `complete` 会检查 `git diff` 确认 progress.md 只有增行，没有删行
-7. **会话结束时留下干净状态**：所有改动已 commit，tests 全过，没有 uncommitted changes。
+8. **`harness/reviews/*.jsonl` 是 append-only** 且 **reset 不清**。
+   每次 review-record 和 review-miss 都 append 一条。这是 reviewer calibration
+   的 corpus — 看哪些 miss 反复出现，就在 reviewer-checklist.md 加新规则。
+9. **Stub feature 不允许 pick**。verification 里还有 cmd_add 占位符的 feature
+   会被 `pick` 归到 BACKLOG NEEDS PLANNING，需要先把合约填完整才能前进。
+10. **会话结束时留下干净状态**：所有改动已 commit，tests 全过，没有 uncommitted changes。
 
 ## 安全模型（重要）
 

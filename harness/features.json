@@ -33,7 +33,12 @@
       "passes": true,
       "verified_sha": "e29296e9b634240cadc2414e5903860eb05c6ca6",
       "blocked_reason": "",
-      "verified_tree": "fbe490baa7e23537"
+      "verified_tree": "fbe490baa7e23537",
+      "review_status": "",
+      "review_notes": "",
+      "reviewed_at": "",
+      "reviewed_contract_sha": "",
+      "reviewer": ""
     },
     {
       "id": "stop-hook-inject-continue",
@@ -67,7 +72,12 @@
       "passes": false,
       "verified_sha": "",
       "blocked_reason": "",
-      "verified_tree": ""
+      "verified_tree": "",
+      "review_status": "",
+      "review_notes": "",
+      "reviewed_at": "",
+      "reviewed_contract_sha": "",
+      "reviewer": ""
     },
     {
       "id": "abort-reason-tracking",
@@ -103,7 +113,12 @@
       "passes": false,
       "verified_sha": "",
       "blocked_reason": "",
-      "verified_tree": ""
+      "verified_tree": "",
+      "review_status": "",
+      "review_notes": "",
+      "reviewed_at": "",
+      "reviewed_contract_sha": "",
+      "reviewer": ""
     },
     {
       "id": "wire-hooks-into-orchestrator",
@@ -138,7 +153,12 @@
       "passes": false,
       "verified_sha": "",
       "blocked_reason": "",
-      "verified_tree": ""
+      "verified_tree": "",
+      "review_status": "",
+      "review_notes": "",
+      "reviewed_at": "",
+      "reviewed_contract_sha": "",
+      "reviewer": ""
     },
     {
       "id": "when-to-use-skill-field",
@@ -169,7 +189,58 @@
       "passes": false,
       "verified_sha": "",
       "blocked_reason": "",
-      "verified_tree": ""
+      "verified_tree": "",
+      "review_status": "",
+      "review_notes": "",
+      "reviewed_at": "",
+      "reviewed_contract_sha": "",
+      "reviewer": ""
+    },
+    {
+      "id": "harness-contract-review",
+      "title": "Contract review mechanism (gate verify on approved review)",
+      "category": "harness-meta",
+      "priority": "critical",
+      "description": "Add harness.py review <id> and harness.py review-record <id> subcommands. Review generates a packet (contract + features.json entry + machine sanity results + checklist) for an external reviewer (human or subagent) to evaluate. review-record stores the verdict in features.json with SHA-based locking. verify and complete refuse to run unless review_status == 'approved' and the contract hash matches the reviewed one.",
+      "motivation": "Currently the harness has no gate between 'contract written' and 'implementation started'. This caused round-1 reviewer to catch a live instance of the problem: the original pre-post-tool-hooks contract proposed adding HookEvent.PRE_TOOL_USE, which already existed — the author wrote the contract without reading the source. A contract review step would have caught this in minutes instead of after implementation. Anthropic's harness-design-long-running-apps article explicitly makes this step the core mechanic: 'Before each sprint, the generator and evaluator negotiated a sprint contract: agreeing on what \"done\" looked like for that chunk of work before any code was written.'",
+      "acceptance_criteria": [
+        "harness.py review <id> prints a structured review packet to stdout (contract text, features.json entry, machine sanity results, reviewer checklist, verdict instructions)",
+        "harness.py review-record <id> --status {approved|changes_requested|blocking} --notes TEXT updates features.json fields: review_status, review_notes, reviewed_at (ISO timestamp), reviewed_contract_sha (sha256 of contract file bytes)",
+        "review-record REJECTS an approved status if the contract doesn't exist or has unresolved TODOs (the one structural gate that's non-negotiable)",
+        "review-record --notes TEXT requires non-empty notes for any non-approved status (justify rejection)",
+        "New Feature dataclass fields: review_status (default ''), review_notes (default ''), reviewed_at (default ''), reviewed_contract_sha (default '')",
+        "cmd_verify refuses to run if review_status != 'approved' (with clear error + suggested command)",
+        "cmd_verify refuses to run if current contract sha != reviewed_contract_sha (contract edited since review — must re-review)",
+        "Gate escape: --skip-review REASON flag on verify and complete, requires non-empty audit reason, printed to stderr",
+        "cmd_reset clears all four review fields alongside verified_sha/verified_tree",
+        "Review packet includes: contract file path, full contract text, features.json entry as pretty JSON, list of files mentioned in contract (with exists/missing marker), list of verification commands with validator result, a 10-point checklist for the reviewer",
+        "Machine sanity in the packet: (a) every file path mentioned exists OR is clearly a new-file path; (b) every verification command passes validate_and_parse_verify_command; (c) contract has non-empty Motivation/Scope/Design/Acceptance Criteria/Verification Commands sections; (d) no literal 'TODO:' markers remain",
+        "New test test_review_record_approves_and_gates",
+        "New test test_review_record_rejects_without_notes",
+        "New test test_review_record_detects_contract_edit",
+        "New test test_verify_refuses_without_approved_review",
+        "New test test_skip_review_with_reason",
+        "All 434 existing mock tests still pass",
+        "progress.md documents the calibration philosophy (article quote + plan for iterating on reviewer prompts)"
+      ],
+      "verification": [
+        ".venv/bin/python -c \"import subprocess; r = subprocess.run(['.venv/bin/python', 'harness/harness.py', 'review', '--help'], capture_output=True, text=True); assert r.returncode == 0 and 'review' in r.stdout, r.stdout + r.stderr\"",
+        ".venv/bin/python -c \"import subprocess; r = subprocess.run(['.venv/bin/python', 'harness/harness.py', 'review-record', '--help'], capture_output=True, text=True); assert r.returncode == 0 and '--status' in r.stdout, r.stdout + r.stderr\"",
+        ".venv/bin/python -c \"import sys; sys.path.insert(0, 'harness'); import harness as h; assert 'review_status' in {f.name for f in __import__('dataclasses').fields(h.Feature)}, 'Feature missing review_status field'\"",
+        ".venv/bin/python -m pytest tests/ -q -k 'review_record_approves_and_gates or review_record_rejects_without_notes or review_record_detects_contract_edit or verify_refuses_without_approved_review or skip_review_with_reason or reset_clears_review_fields'",
+        ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
+      ],
+      "reference": "https://www.anthropic.com/engineering/harness-design-long-running-apps — specifically the 'sprint contract' negotiation pattern: 'Before each sprint, the generator and evaluator negotiated a sprint contract... The two iterated until they agreed.' Our implementation replaces the human evaluator role with a subagent call driven by the caller (not spawned by harness.py itself).",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "ee7db5aab53f853d5f90d1b08ff2c69cdeb46fcb",
+      "verified_tree": "4ad773e5d444d45a",
+      "blocked_reason": "",
+      "review_status": "approved",
+      "review_notes": "bootstrap case",
+      "reviewed_at": "2026-04-06T08:32:16+00:00",
+      "reviewed_contract_sha": "6c691d68f12a6d02",
+      "reviewer": "self"
     }
   ]
 }
