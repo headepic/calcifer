@@ -59,13 +59,41 @@ class FeatureList:
 
     @classmethod
     def load(cls, path: str | Path) -> FeatureList:
-        """Load feature list from JSON. Returns empty list on parse error."""
-        try:
-            data = json.loads(Path(path).read_text())
-            return cls(features=[Feature.from_dict(f) for f in data])
-        except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
-            logger.warning("Failed to load feature list from %s: %s", path, e)
+        """Load feature list from JSON with corruption detection.
+
+        Distinguishes: file not found (returns empty), parse error (logs ERROR,
+        returns empty), structural corruption (drops corrupt entries + warns).
+        """
+        p = Path(path)
+        if not p.exists():
             return cls()
+        try:
+            data = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            logger.error("CORRUPT feature list %s: %s — recovery needed", path, e)
+            return cls()
+        if not isinstance(data, list):
+            logger.error("CORRUPT feature list %s: expected array, got %s", path, type(data).__name__)
+            return cls()
+        features = []
+        for i, item in enumerate(data):
+            f = Feature.from_dict(item) if isinstance(item, dict) else None
+            if f and f.description:
+                features.append(f)
+            else:
+                logger.warning("Feature list %s: dropping corrupt entry at index %d", path, i)
+        return cls(features=features)
+
+    @staticmethod
+    def snapshot(path: str | Path) -> None:
+        """Save a timestamped backup before a session modifies the feature list."""
+        import shutil
+        import datetime
+        src = Path(path)
+        if src.exists():
+            ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = src.with_suffix(f".{ts}.bak")
+            shutil.copy2(src, backup)
 
     @property
     def pending(self) -> list[Feature]:
@@ -137,9 +165,20 @@ class EvalResult:
         Path(path).write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False))
 
     @classmethod
-    def load(cls, path: str | Path) -> EvalResult:
-        data = json.loads(Path(path).read_text())
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+    def load(cls, path: str | Path) -> EvalResult | None:
+        """Load eval result from JSON. Returns None on parse failure."""
+        p = Path(path)
+        if not p.exists():
+            return None
+        try:
+            data = json.loads(p.read_text())
+            if not isinstance(data, dict):
+                logger.warning("Eval result %s: expected object, got %s", path, type(data).__name__)
+                return None
+            return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+        except (json.JSONDecodeError, OSError, TypeError) as e:
+            logger.warning("Failed to load eval result from %s: %s", path, e)
+            return None
 
     def summary(self) -> str:
         status = "PASS" if self.passed else "FAIL"

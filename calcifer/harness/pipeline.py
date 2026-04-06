@@ -3,38 +3,33 @@
 Pattern from "Harness Design for Long-Running Application Development":
 - Planner expands a short spec into a full product plan
 - Generator builds features with self-testing
-- Evaluator grades against criteria and catches missed bugs
-
-Key insight: "Tuning a standalone evaluator to be skeptical turns out to
-be far more tractable than making a generator critical of its own work."
-
-Communication between agents happens through files, not in-context passing.
-Each agent gets a full context reset with only the structured artifacts.
+- Evaluator grades against criteria with few-shot calibration
+- Generator reads evaluator feedback each round (closed feedback loop)
 """
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from ..agent import Agent, AgentResult
+from ..agent import AgentResult
 from ..config import CalciferConfig
 from ..tool import Tool
 from ..types.message import StreamEvent
 from .artifacts import EvalResult, FeatureList, ProgressLog
+from .base import HarnessBase
 
 logger = logging.getLogger(__name__)
 
-OnEventFn = Callable[[str, StreamEvent], None] | None  # (phase, event) callback
+OnEventFn = Callable[[str, StreamEvent], None] | None
 
 DEFAULT_CRITERIA = {
-    "functionality": "Can users complete tasks without errors? Do all features work?",
-    "code_quality": "Clean architecture, no dead code, proper error handling?",
-    "design_quality": "Coherent visual design, consistent spacing, good typography?",
-    "completeness": "Are all specified features implemented? Any gaps?",
+    "functionality": "Can users complete tasks without errors? Do all features work end-to-end?",
+    "code_quality": "Clean architecture, no dead code, proper error handling, no hacks?",
+    "design_quality": "Coherent visual identity? Penalize generic AI patterns (gradient hero sections, default sans-serif, identical card layouts).",
+    "completeness": "Are ALL specified features implemented? Any gaps between spec and reality?",
 }
 
 PLANNER_PROMPT = """\
@@ -45,13 +40,14 @@ comprehensive product plan.
 1. Expand the spec into detailed feature descriptions
 2. Identify technical architecture decisions
 3. Create a prioritized feature list as JSON (`{feature_list}`)
+   — A thorough list typically has 50-200+ items. If yours has fewer than 30, add more.
 4. Write the plan to `{plan_file}`
 
 **Guidelines:**
 - Be ambitious on scope
 - Order features by dependency (foundations first)
 - Each feature needs concrete verification steps
-- Stay focused on WHAT to build, not HOW (let the builder decide)
+- Stay focused on WHAT to build, not HOW
 
 **Output format for `{feature_list}`:**
 JSON array of objects: {{"category", "description", "steps", "passes": false, "priority"}}
@@ -61,17 +57,26 @@ Specification:
 """
 
 GENERATOR_PROMPT = """\
-You are a coding agent. Build the next features from the feature list.
+You are a coding agent. Build features from the feature list.
 
-**Session startup:**
+**Session startup (do this first):**
 1. Read `{plan_file}` for the product vision.
 2. Read `{feature_list}` and pick the highest-priority unfinished features.
-3. Read `{progress_file}` for context on prior work.
+3. Read the LAST 3 entries of `{progress_file}` (not the full file).
 4. Read recent git log: `git log --oneline -20`
-5. Start the dev server if an init script exists.
+5. If `{eval_result}` exists, read it — the evaluator found issues you need to fix.
+6. Start the dev server if an init script exists.
+7. Run a baseline test to check for broken functionality. Fix bugs first.
+
+**Evaluator feedback:**
+If there is a previous evaluation, read it carefully. Fix ALL issues the evaluator
+identified before building new features. If scores are improving, continue refining.
+If scores are flat or declining, consider a different approach.
 
 **During development:**
-- Build and test features.
+- Build and test features thoroughly.
+- Test as a real user would — interact with the running application.{browser_instructions}
+- NEVER delete, weaken, or modify existing tests. Fix the code instead.
 - Self-test before declaring done.
 - Commit with descriptive messages.
 
@@ -79,6 +84,9 @@ You are a coding agent. Build the next features from the feature list.
 - Update `{feature_list}` (set passes=true only if verified).
 - Update `{progress_file}` with what you did.
 - Write a brief summary of changes to `{sprint_result}`.
+
+**Context anxiety:** Do not rush. Focus on quality. Commit partial progress
+rather than shipping broken code.
 """
 
 EVALUATOR_PROMPT = """\
@@ -89,23 +97,33 @@ that the builder missed. Do NOT trust self-reported pass status.
 1. Read `{plan_file}` to understand the full spec.
 2. Read `{feature_list}` to see what should be working.
 3. Read `{sprint_result}` to see what was just built.
-4. Start the app and TEST EVERY FEATURE as a real user would.
-5. Check for errors, test edge cases, verify all claimed functionality.
+4. Start the app and TEST EVERY FEATURE as a real user would.{browser_instructions}
+5. Check console/logs for errors after each interaction.
+6. Test edge cases, not just happy paths.
 
 **Grading criteria (score 0-10 each):**
 {criteria}
+
+**Scoring calibration:**
+- **1-3**: Fundamentally broken. Feature doesn't work or is missing entirely.
+- **4-5**: Partially works but has obvious bugs or missing pieces.
+- **6-7**: Works for happy path but has edge case issues or polish gaps.
+- **8-9**: Works well with minor issues. Production-ready with small fixes.
+- **10**: Exceptional. No issues found.
 
 **Output:** Write your evaluation to `{eval_result}` as:
 {{
   "passed": true/false,
   "score": {{"criterion_name": 0-10, ...}},
-  "issues": ["list of bugs and gaps found"],
-  "suggestions": ["list of improvements"]
+  "issues": ["list of specific bugs and gaps found"],
+  "suggestions": ["list of concrete improvements"]
 }}
 
-**Pass threshold:** ALL criteria must score >= {pass_threshold} to pass.
+**Pass rule:** ALL criteria must score >= {pass_threshold}. Set "passed" accordingly.
+Do NOT set "passed": true if any criterion is below {pass_threshold}.
 
-Be thorough. Be skeptical.
+Be thorough. Be skeptical. The builder will praise its own work —
+your job is to find what's actually broken.
 """
 
 
@@ -140,7 +158,7 @@ class PipelineResult:
     total_cost_usd: float = 0.0
 
 
-class Pipeline:
+class Pipeline(HarnessBase):
     """Planner → Generator → Evaluator pipeline.
 
     Usage:
@@ -158,54 +176,17 @@ class Pipeline:
         evaluator_tools: list[Tool] | None = None,
         on_event: OnEventFn = None,
     ):
-        self._agent_config = agent_config
-        self._tools = tools
         self._evaluator_tools = evaluator_tools or tools
         self._spec = spec
         self._config = pipeline_config or PipelineConfig()
         self._on_event = on_event
-        self._total_cost = 0.0
-        self._progress = ProgressLog(path=self._config.progress_path)
-
-    def _make_config(self, **overrides: Any) -> CalciferConfig:
-        return dataclasses.replace(self._agent_config, **overrides)
-
-    async def _run_agent(self, prompt: str, tools: list[Tool], phase: str, max_turns: int | None = None) -> AgentResult:
-        """Run an agent with retry, cost tracking, and event forwarding."""
-        config = self._make_config(max_turns=max_turns or self._config.max_turns_per_agent)
-
-        for attempt in range(1, self._config.max_retries_per_phase + 1):
-            try:
-                async with Agent(config=config, tools=tools) as agent:
-                    if self._agent_config.mcp_servers:
-                        await agent.connect_mcp_servers()
-                    try:
-                        if self._on_event:
-                            result = None
-                            async for event in agent.run_stream(prompt):
-                                self._on_event(phase, event)
-                                if event.type == "run_complete" and event.result:
-                                    result = event.result
-                            if result is None:
-                                raise RuntimeError("Agent ended without result")
-                        else:
-                            result = await agent.run(prompt)
-                        return result
-                    finally:
-                        self._total_cost += agent.cost_tracker.get_cost()
-            except Exception as e:
-                logger.warning("%s attempt %d failed: %s", phase, attempt, e)
-                if attempt >= self._config.max_retries_per_phase:
-                    raise
-
-        raise RuntimeError("Unreachable")  # for type checker
-
-    def _check_cost(self) -> bool:
-        """Returns True if cost limit exceeded."""
-        if self._config.max_cost_usd and self._total_cost >= self._config.max_cost_usd:
-            logger.warning("Cost limit reached: $%.2f", self._total_cost)
-            return True
-        return False
+        super().__init__(
+            agent_config=agent_config,
+            tools=tools,
+            progress_path=self._config.progress_path,
+            max_retries=self._config.max_retries_per_phase,
+            max_cost_usd=self._config.max_cost_usd,
+        )
 
     async def run_planner(self) -> AgentResult:
         prompt = PLANNER_PROMPT.format(
@@ -213,18 +194,43 @@ class Pipeline:
             feature_list=self._config.feature_list_path,
             plan_file=self._config.plan_path,
         )
-        result = await self._run_agent(prompt, self._tools, "planner")
+        result = await self._run_agent(
+            prompt, self._tools, "planner",
+            max_turns=self._config.max_turns_per_agent,
+            on_event=self._on_event,
+        )
         self._progress.append("planner", "Planner completed.")
         return result
 
     async def run_generator(self, round_num: int) -> AgentResult:
+        # Snapshot feature list before generator modifies it (corruption recovery)
+        FeatureList.snapshot(self._config.feature_list_path)
+        pre_fl = FeatureList.load(self._config.feature_list_path)
+        pre_count = len(pre_fl.features)
+
+        browser_instructions = self._detect_browser_tools(self._tools)
         prompt = GENERATOR_PROMPT.format(
             feature_list=self._config.feature_list_path,
             plan_file=self._config.plan_path,
             progress_file=self._config.progress_path,
             sprint_result=self._config.sprint_result_path,
+            eval_result=self._config.eval_result_path,
+            browser_instructions=browser_instructions,
         )
-        result = await self._run_agent(prompt, self._tools, f"generator-r{round_num}")
+        result = await self._run_agent(
+            prompt, self._tools, f"generator-r{round_num}",
+            max_turns=self._config.max_turns_per_agent,
+            on_event=self._on_event,
+        )
+
+        # Post-round: validate feature list integrity
+        post_fl = FeatureList.load(self._config.feature_list_path)
+        if len(post_fl.features) > 0 and len(post_fl.features) < pre_count * 0.5:
+            logger.warning(
+                "Feature list shrank from %d to %d in round %d — possible corruption",
+                pre_count, len(post_fl.features), round_num,
+            )
+
         self._progress.append(f"generator-r{round_num}", f"Generator round {round_num} completed.")
         return result
 
@@ -232,6 +238,7 @@ class Pipeline:
         criteria_text = "\n".join(
             f"- **{name}:** {desc}" for name, desc in self._config.criteria.items()
         )
+        browser_instructions = self._detect_browser_tools(self._evaluator_tools)
         prompt = EVALUATOR_PROMPT.format(
             criteria=criteria_text,
             pass_threshold=self._config.pass_threshold,
@@ -239,16 +246,28 @@ class Pipeline:
             plan_file=self._config.plan_path,
             sprint_result=self._config.sprint_result_path,
             eval_result=self._config.eval_result_path,
+            browser_instructions=browser_instructions,
         )
-        result = await self._run_agent(prompt, self._evaluator_tools, f"evaluator-r{round_num}", max_turns=50)
+        result = await self._run_agent(
+            prompt, self._evaluator_tools, f"evaluator-r{round_num}",
+            max_turns=50,
+            on_event=self._on_event,
+        )
 
-        eval_result = None
-        eval_path = Path(self._config.eval_result_path)
-        if eval_path.exists():
-            try:
-                eval_result = EvalResult.load(eval_path)
-            except Exception as e:
-                logger.warning("Failed to parse eval result: %s", e)
+        # Load and validate eval result (EvalResult.load handles errors internally)
+        eval_result = EvalResult.load(self._config.eval_result_path)
+        if eval_result and eval_result.score:
+            # Programmatic enforcement: override agent's passed flag
+            all_pass = all(
+                s >= self._config.pass_threshold
+                for s in eval_result.score.values()
+            )
+            if eval_result.passed != all_pass:
+                logger.warning(
+                    "Evaluator claimed passed=%s but scores say %s — overriding",
+                    eval_result.passed, all_pass,
+                )
+                eval_result.passed = all_pass
 
         self._progress.append(
             f"evaluator-r{round_num}",
@@ -260,7 +279,7 @@ class Pipeline:
         """Run the full pipeline: plan → (generate → evaluate) × N."""
         result = PipelineResult()
 
-        # Phase 1: Planning (skip if both plan and feature list exist)
+        # Phase 1: Planning
         plan_exists = Path(self._config.plan_path).exists()
         features_exist = Path(self._config.feature_list_path).exists()
         if not (plan_exists and features_exist):
@@ -274,7 +293,6 @@ class Pipeline:
             logger.info("=== Round %d/%d ===", round_num, self._config.max_rounds)
 
             gen_result = await self.run_generator(round_num)
-
             if self._check_cost():
                 break
 
