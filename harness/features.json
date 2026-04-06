@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Calcifer feature backlog. Only harness.py complete modifies passes and verified_sha. All other fields require an explicit plan commit.",
+  "description": "Calcifer feature backlog. harness.py verify writes verified_sha + verified_tree on success; harness.py complete sets passes=true. Other fields (title, priority, category, acceptance_criteria, verification, reference, description, motivation) are author-editable in plan commits only.",
   "features": [
     {
       "id": "mcp-auth-refresh",
@@ -32,7 +32,8 @@
       "status": "pending",
       "passes": false,
       "verified_sha": "",
-      "blocked_reason": ""
+      "blocked_reason": "",
+      "verified_tree": ""
     },
     {
       "id": "stop-hook-inject-continue",
@@ -65,7 +66,8 @@
       "status": "pending",
       "passes": false,
       "verified_sha": "",
-      "blocked_reason": ""
+      "blocked_reason": "",
+      "verified_tree": ""
     },
     {
       "id": "abort-reason-tracking",
@@ -100,7 +102,8 @@
       "status": "pending",
       "passes": false,
       "verified_sha": "",
-      "blocked_reason": ""
+      "blocked_reason": "",
+      "verified_tree": ""
     },
     {
       "id": "wire-hooks-into-orchestrator",
@@ -134,7 +137,8 @@
       "status": "pending",
       "passes": false,
       "verified_sha": "",
-      "blocked_reason": ""
+      "blocked_reason": "",
+      "verified_tree": ""
     },
     {
       "id": "when-to-use-skill-field",
@@ -164,7 +168,8 @@
       "status": "pending",
       "passes": false,
       "verified_sha": "",
-      "blocked_reason": ""
+      "blocked_reason": "",
+      "verified_tree": ""
     }
   ]
 }

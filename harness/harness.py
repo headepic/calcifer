@@ -165,33 +165,54 @@ def working_tree_fingerprint() -> str:
     """Hash of the current working tree state relative to HEAD.
 
     Combines:
-      - `git diff HEAD` (staged + unstaged changes to tracked files)
-      - `git ls-files --others --exclude-standard` (untracked non-ignored files)
+      - `git diff HEAD` for tracked files (staged + unstaged)
+      - For each untracked non-ignored file: path + SHA256 of its contents
 
-    Excludes harness/features.json and harness/progress.md from the diff,
-    since those are expected to be modified during the harness workflow
-    itself. Returns empty string on error.
+    Excludes harness/features.json and harness/progress.md (expected to be
+    modified during the harness workflow itself).
+
+    Hashing untracked *contents* (not just names) closes a narrow bypass
+    where a user could verify against an untracked file, then swap its
+    body with a dummy while keeping the filename. Returns empty string on
+    error.
     """
     import hashlib
     try:
-        # Tracked changes (diff against HEAD)
         diff = subprocess.run(
             ["git", "diff", "HEAD", "--"] + [
                 f":(exclude){p}" for p in _HARNESS_DIRTY_ALLOWLIST
             ],
             cwd=ROOT, capture_output=True, text=True, check=True,
         ).stdout
-        # Untracked files (names only — contents would require reading each)
+
         untracked = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard"],
             cwd=ROOT, capture_output=True, text=True, check=True,
         ).stdout
-        # Filter untracked to exclude the allowlist paths
-        untracked_filtered = "\n".join(
-            line for line in untracked.splitlines()
-            if line not in _HARNESS_DIRTY_ALLOWLIST
-        )
-        combined = diff + "\n---UNTRACKED---\n" + untracked_filtered
+
+        # Hash each untracked file's contents (bounded read: 10 MB/file cap)
+        untracked_parts: list[str] = []
+        for rel_path in sorted(untracked.splitlines()):
+            if rel_path in _HARNESS_DIRTY_ALLOWLIST:
+                continue
+            abs_path = ROOT / rel_path
+            try:
+                if abs_path.is_file():
+                    size = abs_path.stat().st_size
+                    if size > 10 * 1024 * 1024:
+                        # Too large to hash; include size in the fingerprint instead
+                        untracked_parts.append(f"{rel_path}\0LARGE:{size}")
+                    else:
+                        content = abs_path.read_bytes()
+                        digest = hashlib.sha256(content).hexdigest()
+                        untracked_parts.append(f"{rel_path}\0{digest}")
+                else:
+                    # Symlink, fifo, etc. — just include the path
+                    untracked_parts.append(f"{rel_path}\0NONFILE")
+            except OSError as e:
+                untracked_parts.append(f"{rel_path}\0ERR:{e}")
+
+        combined = diff + "\n---UNTRACKED---\n" + "\n".join(untracked_parts)
         return hashlib.sha256(combined.encode("utf-8", errors="replace")).hexdigest()[:16]
     except (subprocess.CalledProcessError, FileNotFoundError):
         return ""
@@ -488,12 +509,20 @@ def cmd_complete(args: argparse.Namespace) -> int:
             return 1
 
     # Progress.md touch check: must be modified since HEAD, AND only additions (append-only)
-    if not args.skip_progress_check:
+    if args.skip_progress_check:
+        # Explicit bypass — require a non-empty audit string
+        audit = (args.skip_progress_check or "").strip()
+        if not audit:
+            print("ERROR: --skip-progress-check requires a non-empty audit reason")
+            print('  example: --skip-progress-check "bugfix with no behavior change"')
+            return 1
+        print(f"WARNING: progress.md check bypassed — reason: {audit}", file=sys.stderr)
+    else:
         status_ok, reason = _progress_edits_status()
         if not status_ok:
             print()
             print(f"ERROR: {reason}")
-            print("(Override with --skip-progress-check if truly a no-change case.)")
+            print('(Override with --skip-progress-check "reason" only if truly a no-change case.)')
             return 1
 
     # Update passes field — single write (we already reloaded after verify)
@@ -549,16 +578,46 @@ def _progress_edits_status() -> tuple[bool, str]:
         # Could be brand-new untracked file — that's fine (all additions)
         return True, ""
 
+    # Walk the unified diff. Only skip actual diff headers (not bare "---" that
+    # appears as a progress.md content line / markdown horizontal rule).
+    # Diff metadata forms we accept as headers:
+    #   "diff --git a/... b/..."   (file header)
+    #   "index <sha>..<sha> ..."   (index line)
+    #   "new file mode ..."        (file mode change)
+    #   "deleted file mode ..."
+    #   "rename from ..."          (rename)
+    #   "rename to ..."
+    #   "similarity index ..."
+    #   "--- a/..." or "--- /dev/null"   (old-file header)
+    #   "+++ b/..." or "+++ /dev/null"   (new-file header)
+    #   "@@ ..."                   (hunk header)
+    in_hunk = False
     for line in diff.stdout.splitlines():
-        # Skip diff metadata
-        if line.startswith("---") or line.startswith("+++") or line.startswith("@@") \
-           or line.startswith("diff ") or line.startswith("index "):
+        if line.startswith("@@"):
+            in_hunk = True
             continue
-        # A removal line (not metadata) violates append-only
-        if line.startswith("-") and line.strip() != "-":
+        if not in_hunk:
+            # Before the first hunk — everything is diff metadata
+            continue
+        # Inside a hunk: headers can reappear only as ' ' / '+' / '-' / '\'.
+        # A bare "---" content line in progress.md will appear in the diff
+        # as " ---" (context), "+---" (added), or "-\\---" ... actually
+        # git emits it as "-" + the literal content. So the concrete form
+        # for a removed markdown HR is "---" (the first char is '-', the
+        # other two are literal content chars). This is ambiguous with
+        # the "--- a/path" old-file header, BUT inside a hunk that header
+        # cannot appear — old/new-file headers are pre-hunk.
+        #
+        # Therefore: once we're in a hunk, treat any line starting with '-'
+        # (but not '--- ' with a space, just in case git emits something odd)
+        # as a real removal.
+        if line.startswith("-"):
+            # Literal "-" followed by nothing is an empty-line removal
+            # (removing a blank line). Still a removal. Reject it.
             return False, (
-                "harness/progress.md was edited non-appendingly (removed lines). "
-                "progress.md must be append-only. Revert old-entry edits and keep only additions."
+                "harness/progress.md was edited non-appendingly (removed or "
+                "modified lines). progress.md must be append-only — old "
+                "entries may not be edited or deleted."
             )
 
     return True, ""
@@ -794,8 +853,13 @@ def main() -> int:
     p_complete.add_argument("feature_id")
     p_complete.add_argument(
         "--skip-progress-check",
-        action="store_true",
-        help="Allow complete without a progress.md edit (use sparingly)",
+        default=None,
+        metavar="REASON",
+        help=(
+            "Allow complete without a progress.md edit. REQUIRES a non-empty "
+            "audit reason string. The reason is printed to stderr for logging. "
+            "Example: --skip-progress-check 'pure whitespace refactor'"
+        ),
     )
 
     p_add = sub.add_parser("add", help="Add a new feature to the backlog")

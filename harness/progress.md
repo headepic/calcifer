@@ -5,6 +5,24 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — Harness round 3 review fixes
+
+Round 3 verdict: PASS WITH MINOR FIXES. All 11 round-2 claims verified fixed. Addressed the 1 medium + 3 low + 1 info items the reviewer identified.
+
+- [MEDIUM] _progress_edits_status diff parser: previously skipped any line starting with '---' as metadata, which wrongly caught bare '---' markdown HR lines in progress.md content. Reviewer demonstrated: deleting an HR line was not detected as a non-append edit. Fix: track in_hunk state (set by '@@' line) and only treat lines as removals inside hunks. Pre-hunk lines are diff metadata. Verified with a real git-diff reproduction.
+
+- [LOW] working_tree_fingerprint now hashes untracked file CONTENTS (sha256), not just paths. Previous version would accept a same-named untracked file with different content as a cache hit. Bounded at 10MB/file; symlinks/fifos get a NONFILE marker. Verified by content-swap test.
+
+- [LOW] Backfilled verified_tree field on all 5 existing features.json entries. Updated top-level description to accurately say 'harness.py verify writes verified_sha + verified_tree on success; harness.py complete sets passes=true' (previously conflated verify and complete).
+
+- [LOW] --skip-progress-check now takes a non-empty audit REASON string (was action='store_true'). The reason is printed to stderr for logging. Bypassing without a reason fails loudly. Rejects whitespace-only reasons.
+
+- [INFO] Added 'Safety model' section to CLAUDE.md explaining that the verify allow-list gates command SHAPE (prefixes), not payload. python -c '...' is allowed; the actual Python code must be reviewed in the plan commit. Harness is a collaboration quality gate, not a sandbox against hostile authors.
+
+All 429 mock tests still pass. Reviewer's bypass tests (HR deletion, content swap) all correctly rejected now.
+
+---
+
 ## 2026-04-06 — Harness round 2 review fixes
 
 Applied fixes from round 2 review (15 findings). Critical fixes:

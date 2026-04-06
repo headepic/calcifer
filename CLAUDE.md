@@ -61,6 +61,21 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
    - `complete` 会检查 `git diff` 确认 progress.md 只有增行，没有删行
 7. **会话结束时留下干净状态**：所有改动已 commit，tests 全过，没有 uncommitted changes。
 
+## 安全模型（重要）
+
+Harness 的 verify allow-list 控制**命令形状**（前缀必须是 `pytest`、
+`.venv/bin/python` 等），**不是 payload**。也就是说 `python -c "任意代码"`
+是允许的 —— 只要 feature 作者写进 `features.json` 的 Python 代码本身是
+可接受的。
+
+含义：
+- `features.json` 的修改必须**走 plan commit 审阅**，和代码改动一样严肃对待
+- Harness 不是对抗恶意作者的沙箱，是对抗手抖／输入错误的护栏
+- 实际执行时没有 shell（argv mode），所以 shell injection（`;`、`&&`、
+  redirect、命令替换、glob）全部无效 —— 但 Python 代码本身的副作用是真实的
+
+不要把 harness 理解成 CI 的安全隔离。它是一个协作流程的质量门。
+
 ## 不走 harness 的例外
 
 以下情况可以跳过 harness：
