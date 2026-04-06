@@ -352,20 +352,22 @@
         "All 434 tests still pass"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"import tomllib; from pathlib import Path; d = tomllib.loads(Path('pyproject.toml').read_text()); p = d['project']; assert p['version'] == '0.3.0.dev0', f'version is {p[\\\"version\\\"]}'; assert p['license'], 'license missing'; assert p.get('authors'), 'authors missing'; assert p.get('keywords'), 'keywords missing'; assert p.get('classifiers'), 'classifiers missing'; assert p.get('readme'), 'readme missing'; assert d['project'].get('urls'), 'project.urls missing'\"",
+        ".venv/bin/python -c \"from pathlib import Path; p = Path('LICENSE'); assert p.exists(), 'LICENSE file missing'; assert p.stat().st_size >= 500, f'LICENSE is too small: {p.stat().st_size} bytes'\"",
+        ".venv/bin/python -m pytest tests/test_packaging.py -q -k 'pyproject_has_required_metadata or pyproject_classifiers_cover_python_versions or license_file_exists'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "PEP 621 — https://peps.python.org/pep-0621/",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "57e442173436443c2c802cf7b211196eabd80f80",
+      "verified_tree": "c95054ece7e2aa30",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Approved (high confidence). Verified pyproject.toml currently has only name/version/description/requires-python/dependencies (lines 1-10), version still 0.2.0. LICENSE file does not exist. tests/test_packaging.py only has the 2 tests from sdk-py-typed-marker. All 3 verify gates fail cleanly pre-impl. Generator note: use license={text='MIT'} (table form) not the SPDX string — hatchling version is unpinned in pyproject.toml line 39 and PEP 639 SPDX strings need hatchling >= 1.26 which we can't guarantee. Minor nit: cmd1 only checks d['project'].get('urls') truthiness, the four-key check happens via the pytest test, which is fine.",
+      "reviewed_at": "2026-04-06T12:14:43+00:00",
+      "reviewed_contract_sha": "a5d93d86c784be2a",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-core-layout",

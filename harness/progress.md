@@ -5,6 +5,12 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-pyproject-metadata implemented
+
+Added full PyPI metadata + LICENSE file. version 0.2.0 → 0.3.0.dev0. Mock tests 465 → 468 (+3). Reviewer flagged license-form question (table vs SPDX string), recommended table form due to unpinned hatchling — followed exactly.
+
+---
+
 ## 2026-04-06 — sdk-config-env-defaults implemented (env-driven base_url resolution)
 
 Replaces the historical 'http://127.0.0.1:8317/v1' default — a private local LLM gateway from early development — with the standard SDK env-fallback chain: explicit kwarg > OPENAI_BASE_URL env var > 'https://api.openai.com/v1' canonical fallback.
