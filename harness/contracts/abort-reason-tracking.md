@@ -122,7 +122,7 @@ def _cancellation_message(reason: AbortReason | None) -> str:
 .venv/bin/python -c "from calcifer import AbortReason"
 .venv/bin/python -c "from calcifer.types.tools import ToolContext; import dataclasses; fields = {f.name for f in dataclasses.fields(ToolContext)}; assert 'abort_reason' in fields"
 .venv/bin/python -c "from calcifer.agent import Agent; import inspect; sig = inspect.signature(Agent.abort); assert 'reason' in sig.parameters"
-.venv/bin/python -m pytest tests/ -q -k 'abort_reason'
+.venv/bin/python -m pytest tests/ -q -k 'abort_user_interrupt_reason or abort_sibling_error_reason or abort_default_reason'
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
 ```
 

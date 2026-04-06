@@ -93,7 +93,7 @@
         ".venv/bin/python -c \"from calcifer import AbortReason\"",
         ".venv/bin/python -c \"from calcifer.types.tools import ToolContext; import dataclasses; fields = {f.name for f in dataclasses.fields(ToolContext)}; assert 'abort_reason' in fields\"",
         ".venv/bin/python -c \"from calcifer.agent import Agent; import inspect; sig = inspect.signature(Agent.abort); assert 'reason' in sig.parameters\"",
-        ".venv/bin/python -m pytest tests/ -q -k 'abort_reason'",
+        ".venv/bin/python -m pytest tests/ -q -k 'abort_user_interrupt_reason or abort_sibling_error_reason or abort_default_reason'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "claude-code-source/src/services/tools/StreamingToolExecutor.ts:153-318 (abort reasons + sibling AbortController). claude-code-source/src/query.ts:1348-1351 (end-of-turn abort reason check).",
@@ -127,7 +127,6 @@
       ],
       "verification": [
         ".venv/bin/python -c \"from calcifer.types.tools import ToolContext; import dataclasses; assert 'hook_manager' in {f.name for f in dataclasses.fields(ToolContext)}\"",
-        ".venv/bin/python -c \"from calcifer.services.tools.orchestrator import execute_tool_call; import inspect; src = inspect.getsource(execute_tool_call); assert 'run_hooks' in src and 'PRE_TOOL_USE' in src and 'POST_TOOL_USE' in src, 'orchestrator does not call hook_manager.run_hooks(PRE/POST_TOOL_USE)'\"",
         ".venv/bin/python -m pytest tests/ -q -k 'pre_tool_hook_veto or pre_tool_hook_rewrite or post_tool_hook_additional_context or tool_hook_exception_does_not_crash'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],

@@ -5,6 +5,26 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — Harness round 2 review fixes
+
+Applied fixes from round 2 review (15 findings). Critical fixes:
+
+- harness.py: removed shell=True entirely. cmd_verify now uses shlex.split as argv list. This eliminates all shell-injection classes (newlines, redirects, process substitution, globs, command substitution). Reviewer's bypass attempts (pytest\nrm -rf ..., pytest >/tmp/pwn, pytest <(...)) all verified neutralized. Added defense-in-depth rejection of redirect-like tokens for fail-fast errors.
+- init.sh: detects timeout / gtimeout / neither (fixes macOS where GNU coreutils is not default). Added trap cleanup for temp pytest log.
+- features.json abort_reason filter fixed: reviewer correctly noted that '-k abort_reason' matches zero tests because none of the required test names contain that substring. Changed to explicit disjunction of the 3 full test names. Contract aligned.
+- Working tree fingerprint cache (addresses N3): verify now records both HEAD SHA AND a sha256 of git diff HEAD + untracked files (excluding harness/features.json and harness/progress.md). complete invalidates cache if either changed. Closes the dirty-tree verify -> revert -> complete bypass.
+- cmd_complete rejects blocked features (must reset first).
+- cmd_complete now a single load; removed triple-read confusion.
+- _progress_edits_status replaces _progress_has_pending_edits: checks both non-empty diff AND append-only (no removed lines in git diff HEAD). Fails closed on subprocess errors.
+- cmd_log: explicit encoding='utf-8', rejects multi-line titles and markdown-metachar starts.
+- Removed inspect.getsource grep-like check from wire-hooks verification (reviewer correctly flagged as same false-positive class as grep). Behavioral pytest tests are the real gate.
+- CLAUDE.md: updated workflow to include resume/block/reset/log subcommands, note cache tree-hash behavior and append-only diff check.
+- Feature dataclass: verified_tree field added alongside verified_sha.
+
+All 429 mock tests still pass. Reviewer bypass attempts verified blocked (pytest >/tmp/X does not create file under argv mode).
+
+---
+
 ## 2026-04-06 — Harness round 1 review fixes
 
 Applied fixes from external reviewer (15 issues found). Critical fixes:

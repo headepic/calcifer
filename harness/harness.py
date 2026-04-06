@@ -64,7 +64,8 @@ class Feature:
     status: str  # "pending", "in_progress", "blocked", "done"
     passes: bool
     # Verify cache — populated by cmd_verify on success, consumed by cmd_complete
-    verified_sha: str = ""
+    verified_sha: str = ""       # HEAD SHA at verify time
+    verified_tree: str = ""      # Working tree fingerprint at verify time (excludes harness/)
     blocked_reason: str = ""
 
     @classmethod
@@ -82,6 +83,7 @@ class Feature:
             status=d.get("status", "pending"),
             passes=d.get("passes", False),
             verified_sha=d.get("verified_sha", ""),
+            verified_tree=d.get("verified_tree", ""),
             blocked_reason=d.get("blocked_reason", ""),
         )
 
@@ -99,6 +101,7 @@ class Feature:
             "status": self.status,
             "passes": self.passes,
             "verified_sha": self.verified_sha,
+            "verified_tree": self.verified_tree,
             "blocked_reason": self.blocked_reason,
         }
 
@@ -154,38 +157,92 @@ def progress_last_modified_sha() -> str:
         return ""
 
 
-def validate_verify_command(cmd: str) -> str | None:
-    """Check if a verify command matches the allow-list.
+# Paths that are allowed to be dirty during verify/complete without invalidating the cache
+_HARNESS_DIRTY_ALLOWLIST = {"harness/features.json", "harness/progress.md"}
 
-    Returns None if OK, or a string explaining why it's rejected.
 
-    shlex.split tokenizes the command respecting quotes, so a semicolon
-    inside a quoted Python string (`python -c "a; b"`) becomes part of
-    the token, not its own token. We reject only tokens that are
-    unquoted shell metacharacters.
+def working_tree_fingerprint() -> str:
+    """Hash of the current working tree state relative to HEAD.
+
+    Combines:
+      - `git diff HEAD` (staged + unstaged changes to tracked files)
+      - `git ls-files --others --exclude-standard` (untracked non-ignored files)
+
+    Excludes harness/features.json and harness/progress.md from the diff,
+    since those are expected to be modified during the harness workflow
+    itself. Returns empty string on error.
     """
+    import hashlib
+    try:
+        # Tracked changes (diff against HEAD)
+        diff = subprocess.run(
+            ["git", "diff", "HEAD", "--"] + [
+                f":(exclude){p}" for p in _HARNESS_DIRTY_ALLOWLIST
+            ],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout
+        # Untracked files (names only — contents would require reading each)
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout
+        # Filter untracked to exclude the allowlist paths
+        untracked_filtered = "\n".join(
+            line for line in untracked.splitlines()
+            if line not in _HARNESS_DIRTY_ALLOWLIST
+        )
+        combined = diff + "\n---UNTRACKED---\n" + untracked_filtered
+        return hashlib.sha256(combined.encode("utf-8", errors="replace")).hexdigest()[:16]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ""
+
+
+def validate_and_parse_verify_command(cmd: str) -> tuple[list[str] | None, str | None]:
+    """Tokenize a verify command and check it matches the allow-list.
+
+    Returns (argv, None) if OK, or (None, error_message) if rejected.
+
+    Verification commands are executed WITHOUT a shell (subprocess.run
+    with a list argv, not shell=True). This already eliminates all
+    shell-injection classes (newlines, redirects, command substitution,
+    glob expansion, process substitution, etc.) — the shell never sees
+    the string.
+
+    This function adds defense-in-depth:
+      1. Reject tokens containing control characters (newlines, tabs as
+         whole tokens) so bugs in callers that build commands can't smuggle
+         multi-line payloads past the logging.
+      2. Reject tokens that look like unquoted redirects (> < | & ;) —
+         these are harmless without a shell but signal the author intended
+         a shell command and should rewrite it.
+      3. Enforce the allow-list prefix.
+    """
+    if "\n" in cmd or "\r" in cmd:
+        return None, "rejected: command contains newline"
+
     try:
         tokens = shlex.split(cmd)
     except ValueError as e:
-        return f"rejected: unparseable ({e})"
+        return None, f"rejected: unparseable ({e})"
 
     if not tokens:
-        return "rejected: empty command"
+        return None, "rejected: empty command"
 
-    # Reject unquoted shell metacharacters (would appear as their own token)
-    FORBIDDEN_TOKENS = {";", "&&", "||", "|", ">", "<", ">>", "<<", "&"}
+    # Reject tokens that look like unquoted shell syntax (even though harmless
+    # without shell=True, they're a code smell and the author likely meant
+    # something shell-interpreted)
     for tok in tokens:
-        if tok in FORBIDDEN_TOKENS:
-            return f"rejected: unquoted shell metacharacter {tok!r}"
-        # Reject command substitution
-        if "`" in tok or "$(" in tok:
-            return f"rejected: command substitution in {tok!r}"
+        stripped = tok.lstrip(">").lstrip("<").lstrip("|").lstrip("&")
+        if not stripped and tok:
+            return None, f"rejected: token {tok!r} looks like unquoted shell redirect/pipe"
+        if tok.startswith(">") or tok.startswith("<") or tok.startswith("|"):
+            return None, f"rejected: token {tok!r} starts with shell redirect char"
 
     for prefix in VERIFY_ALLOWLIST:
         if len(tokens) >= len(prefix) and tokens[: len(prefix)] == prefix:
-            return None
+            return tokens, None
 
-    return f"rejected: command prefix not in allow-list (got {tokens[:2]!r})"
+    return None, f"rejected: command prefix not in allow-list (got {tokens[:2]!r})"
 
 
 def find_feature(features: list[Feature], feature_id: str) -> Feature | None:
@@ -313,14 +370,17 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"ERROR: feature {feature.id} has no verification commands")
         return 1
 
-    # Validate all commands against the allow-list BEFORE running any
-    for cmd in feature.verification:
-        reason = validate_verify_command(cmd)
+    # Validate + parse all commands BEFORE running any
+    parsed: list[tuple[str, list[str]]] = []
+    for i, cmd in enumerate(feature.verification, 1):
+        argv, reason = validate_and_parse_verify_command(cmd)
         if reason is not None:
-            print(f"ERROR: verification command {reason}")
+            print(f"ERROR: verification command [{i}/{len(feature.verification)}] {reason}")
             print(f"  command: {cmd}")
             print("  Allowed prefixes: grep, pytest, .venv/bin/python, python -c, python -m pytest")
             return 1
+        assert argv is not None
+        parsed.append((cmd, argv))
 
     print(f"Verifying: {feature.id}")
     print(f"  Contract: {contract}")
@@ -329,16 +389,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
     print()
 
     failed: list[tuple[str, int]] = []
-    for i, cmd in enumerate(feature.verification, 1):
-        print(f"  [{i}/{len(feature.verification)}] $ {cmd}")
+    for i, (cmd, argv) in enumerate(parsed, 1):
+        print(f"  [{i}/{len(parsed)}] $ {cmd}")
         try:
+            # No shell=True — argv list eliminates all shell-injection paths
             result = subprocess.run(
-                cmd, shell=True, cwd=ROOT, capture_output=True, text=True,
+                argv, cwd=ROOT, capture_output=True, text=True,
                 timeout=VERIFY_TIMEOUT_S,
             )
         except subprocess.TimeoutExpired:
             print(f"    FAIL (timeout after {VERIFY_TIMEOUT_S}s)")
             failed.append((cmd, -1))
+            continue
+        except FileNotFoundError as e:
+            print(f"    FAIL (command not found: {e})")
+            failed.append((cmd, -2))
             continue
         if result.returncode != 0:
             print(f"    FAIL (exit {result.returncode})")
@@ -359,15 +424,17 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"VERIFY FAILED: {len(failed)}/{len(feature.verification)} commands failed")
         return 1
 
-    # Cache verify success: store current HEAD SHA against the feature
+    # Cache verify success: store HEAD SHA + working tree fingerprint
     sha = git_head_sha()
+    tree = working_tree_fingerprint()
     if sha:
         for f in data["features"]:
             if f["id"] == feature.id:
                 f["verified_sha"] = sha
+                f["verified_tree"] = tree
                 break
         save_features(data)
-        print(f"VERIFY PASSED: {feature.id} (cached at {sha[:10]})")
+        print(f"VERIFY PASSED: {feature.id} (cached at {sha[:10]}, tree {tree or 'unknown'})")
     else:
         print(f"VERIFY PASSED: {feature.id}")
 
@@ -387,34 +454,49 @@ def cmd_complete(args: argparse.Namespace) -> int:
         print(f"Already complete: {feature.id}")
         return 0
 
-    # Verify cache check: if verified_sha matches current HEAD, skip re-run
+    # Reject blocked features — they must be reset first
+    if feature.status == "blocked":
+        print(f"ERROR: {feature.id} is blocked: {feature.blocked_reason or '(no reason)'}")
+        print(f"Resolve the block, then run: python harness/harness.py reset {feature.id}")
+        return 1
+
+    # Verify cache check: BOTH HEAD SHA and working-tree fingerprint must match
     current_sha = git_head_sha()
-    if feature.verified_sha and current_sha and feature.verified_sha == current_sha:
-        print(f"Verification already cached at {current_sha[:10]} — skipping re-run")
+    current_tree = working_tree_fingerprint()
+    cache_valid = (
+        feature.verified_sha
+        and current_sha
+        and feature.verified_sha == current_sha
+        and feature.verified_tree == current_tree
+    )
+    if cache_valid:
+        print(f"Verification cached at {current_sha[:10]} (tree {current_tree or 'unknown'}) — skipping re-run")
     else:
-        # Re-run verification
+        if feature.verified_sha and feature.verified_sha == current_sha and feature.verified_tree != current_tree:
+            print(f"Cache invalidated: working tree changed since verify (was {feature.verified_tree}, now {current_tree})")
         print(f"Running verification for {feature.id}...")
         verify_result = cmd_verify(argparse.Namespace(feature_id=feature.id))
         if verify_result != 0:
             print()
             print("Verification failed. Cannot mark as complete.")
             return 1
-        # Reload data after verify (which may have cached the SHA)
+        # Reload data after verify (it cached sha/tree)
         data, features = load_features()
         feature = find_feature(features, args.feature_id)
+        if feature is None:
+            print(f"ERROR: feature {args.feature_id} vanished after verify")
+            return 1
 
-    # Progress.md touch check: must be modified since HEAD or as uncommitted change
+    # Progress.md touch check: must be modified since HEAD, AND only additions (append-only)
     if not args.skip_progress_check:
-        progress_changed = _progress_has_pending_edits()
-        if not progress_changed:
+        status_ok, reason = _progress_edits_status()
+        if not status_ok:
             print()
-            print("ERROR: harness/progress.md has no pending changes.")
-            print("Append a session entry describing what was done, then re-run complete.")
+            print(f"ERROR: {reason}")
             print("(Override with --skip-progress-check if truly a no-change case.)")
             return 1
 
-    # Update passes field in place (re-read file to avoid race)
-    data, _ = load_features()
+    # Update passes field — single write (we already reloaded after verify)
     for f in data["features"]:
         if f["id"] == feature.id:
             f["passes"] = True
@@ -430,16 +512,56 @@ def cmd_complete(args: argparse.Namespace) -> int:
     return 0
 
 
-def _progress_has_pending_edits() -> bool:
-    """Return True if progress.md has uncommitted changes."""
+def _progress_edits_status() -> tuple[bool, str]:
+    """Check that progress.md has pending edits AND they are append-only.
+
+    Returns (True, "") if OK, (False, reason) if the check fails.
+    Fails CLOSED on subprocess errors.
+    """
     try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain", "--", str(PROGRESS_FILE.relative_to(ROOT))],
+        rel_path = str(PROGRESS_FILE.relative_to(ROOT))
+    except ValueError:
+        return False, "progress.md path is outside repo root"
+
+    # Check for pending edits (tracked changes or untracked)
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--", rel_path],
             cwd=ROOT, capture_output=True, text=True, check=True,
         )
-        return bool(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return True  # Can't check → don't block
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        return False, f"could not check progress.md status ({e})"
+
+    if not status.stdout.strip():
+        return False, "harness/progress.md has no pending changes — append a session entry first"
+
+    # Check that the diff is append-only (no removed non-whitespace lines)
+    try:
+        diff = subprocess.run(
+            ["git", "diff", "HEAD", "--", rel_path],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        return False, f"could not diff progress.md ({e})"
+
+    # If file was deleted or renamed, reject
+    if not diff.stdout:
+        # Could be brand-new untracked file — that's fine (all additions)
+        return True, ""
+
+    for line in diff.stdout.splitlines():
+        # Skip diff metadata
+        if line.startswith("---") or line.startswith("+++") or line.startswith("@@") \
+           or line.startswith("diff ") or line.startswith("index "):
+            continue
+        # A removal line (not metadata) violates append-only
+        if line.startswith("-") and line.strip() != "-":
+            return False, (
+                "harness/progress.md was edited non-appendingly (removed lines). "
+                "progress.md must be append-only. Revert old-entry edits and keep only additions."
+            )
+
+    return True, ""
 
 
 def cmd_add(args: argparse.Namespace) -> int:
@@ -472,6 +594,7 @@ def cmd_add(args: argparse.Namespace) -> int:
         "status": "pending",
         "passes": False,
         "verified_sha": "",
+        "verified_tree": "",
         "blocked_reason": "",
     }
     data["features"].append(new_feature)
@@ -603,6 +726,7 @@ def cmd_reset(args: argparse.Namespace) -> int:
             f["status"] = "pending"
             f["blocked_reason"] = ""
             f["verified_sha"] = ""
+            f["verified_tree"] = ""
             break
     save_features(data)
 
@@ -611,15 +735,23 @@ def cmd_reset(args: argparse.Namespace) -> int:
 
 
 def cmd_log(args: argparse.Namespace) -> int:
-    """Prepend a timestamped entry to progress.md."""
+    """Prepend a timestamped entry to progress.md (UTF-8)."""
     from datetime import date
     today = date.today().isoformat()
+
+    # Reject multi-line / markdown-conflicting titles
+    if "\n" in args.title or "\r" in args.title:
+        print("ERROR: title must be a single line")
+        return 1
+    if args.title.strip().startswith(("#", "-", "*", "---")):
+        print("ERROR: title must not start with a markdown metacharacter (#, -, *, ---)")
+        return 1
 
     if not PROGRESS_FILE.exists():
         print(f"ERROR: {PROGRESS_FILE} does not exist")
         return 1
 
-    existing = PROGRESS_FILE.read_text()
+    existing = PROGRESS_FILE.read_text(encoding="utf-8")
     # Find the first "## " heading and insert before it
     lines = existing.splitlines(keepends=True)
     insert_at = None
@@ -638,12 +770,11 @@ def cmd_log(args: argparse.Namespace) -> int:
     ]
 
     if insert_at is None:
-        # No existing entries — append at end
         new_content = existing.rstrip() + "\n\n" + "".join(entry_lines)
     else:
         new_content = "".join(lines[:insert_at]) + "".join(entry_lines) + "".join(lines[insert_at:])
 
-    PROGRESS_FILE.write_text(new_content)
+    PROGRESS_FILE.write_text(new_content, encoding="utf-8")
     print(f"Logged to {PROGRESS_FILE}: {today} — {args.title}")
     return 0
 

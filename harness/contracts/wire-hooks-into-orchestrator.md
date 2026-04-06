@@ -167,10 +167,15 @@ contract.
 
 ```
 .venv/bin/python -c "from calcifer.types.tools import ToolContext; import dataclasses; assert 'hook_manager' in {f.name for f in dataclasses.fields(ToolContext)}"
-.venv/bin/python -c "from calcifer.services.tools.orchestrator import execute_tool_call; import inspect; src = inspect.getsource(execute_tool_call); assert 'run_hooks' in src and 'PRE_TOOL_USE' in src and 'POST_TOOL_USE' in src, 'orchestrator does not call hook_manager.run_hooks(PRE/POST_TOOL_USE)'"
 .venv/bin/python -m pytest tests/ -q -k 'pre_tool_hook_veto or pre_tool_hook_rewrite or post_tool_hook_additional_context or tool_hook_exception_does_not_crash'
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py
 ```
+
+Note: we intentionally do NOT include an `inspect.getsource` substring check.
+Round 2 review flagged it as morally equivalent to grep — a docstring
+containing the required strings would pass. The behavioral tests
+(`test_pre_tool_hook_veto` etc.) are the real gate: they exercise the actual
+wired-up code path.
 
 ## Rollback Plan
 

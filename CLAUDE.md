@@ -22,28 +22,43 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
 任何新功能都必须经过以下流程：
 
 ```
-1. 启动检查：  ./harness/init.sh
-2. 看状态：    python harness/harness.py status
-3. 选 feature：python harness/harness.py pick
-4. 读合约：    cat harness/contracts/<feature-id>.md
-5. 实现（只改一个 feature）
-6. 验证：      python harness/harness.py verify <feature-id>
-7. 标记完成：  python harness/harness.py complete <feature-id>
-8. 追加日志：  编辑 harness/progress.md（append-only）
-9. 提交：      git commit -m 'feat(area): implement <feature-id>'
+1. 启动检查：    ./harness/init.sh
+2. 看状态：      python harness/harness.py status
+3. 检查未完成：  python harness/harness.py resume
+                (如有 in_progress feature，先完成它们)
+4. 选 feature：  python harness/harness.py pick
+5. 读合约：      cat harness/contracts/<feature-id>.md
+                (不存在则 python harness/harness.py add <id> 先生成)
+6. 实现（只改一个 feature）
+7. 验证：        python harness/harness.py verify <feature-id>
+                (allow-listed 命令 + 600s 超时 + 写 verified_sha/verified_tree)
+8. 追加日志：    python harness/harness.py log "<id>: summary" --body "..."
+                (或手动在 progress.md 顶部追加)
+9. 标记完成：    python harness/harness.py complete <feature-id>
+                (需 cache 命中或 re-verify + progress.md 有待提交的追加)
+10. 提交：       git commit -m 'feat(area): implement <feature-id>'
 ```
+
+### 异常子命令
+
+- **半成品接着做**：`python harness/harness.py resume`（列出 in_progress）
+- **Feature 卡住了**：`python harness/harness.py block <id> --reason "..."`
+- **卡住后重新开始**：`python harness/harness.py reset <id>`（清 verified_sha/verified_tree/blocked_reason）
 
 ## 硬性规则
 
 1. **一次 session 只做一个 feature**。不要顺带修改不相关的代码。
 2. **先写合约，再写代码**。没有合约的 feature 不允许开始实现。
-   - 新 feature：`python harness/harness.py add <id>` 会生成模板
+   - 新 feature：`python harness/harness.py add <id>` 生成 stub 合约
    - 然后填写 `harness/contracts/<id>.md` 的所有小节
    - commit 合约后才能开始实现
 3. **验证是硬性 gate**。`verify` 命令不过就不允许 `complete`。
+   - `complete` 会校验 verified_sha AND verified_tree — 如果 working tree 变了会强制 re-verify
+   - Blocked feature 不能 complete，必须先 `reset`
 4. **不要删除或修改已有测试**，除非合约明确说要重构该测试。
-5. **不要修改 `features.json` 的字段**（`harness.py complete` 除外）。
-6. **`progress.md` 是 append-only**。只在顶部追加新条目，永远不要编辑旧条目。
+5. **不要修改 `features.json` 的字段**（`harness.py complete/verify/block/reset` 除外）。
+6. **`progress.md` 是 append-only**。只在顶部追加新条目，永远不要编辑或删除旧条目。
+   - `complete` 会检查 `git diff` 确认 progress.md 只有增行，没有删行
 7. **会话结束时留下干净状态**：所有改动已 commit，tests 全过，没有 uncommitted changes。
 
 ## 不走 harness 的例外

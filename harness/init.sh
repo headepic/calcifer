@@ -45,22 +45,38 @@ fi
 echo "OK: working tree clean"
 
 # 5. Test suite (quick sanity check — mock tests only)
+# Detect which timeout binary is available:
+#   - Linux: GNU coreutils `timeout` is default
+#   - macOS: neither is default; `gtimeout` exists if `brew install coreutils`
+#   - Fallback: run without timeout (rely on user to Ctrl+C if stuck)
+_TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+    _TIMEOUT_CMD="timeout 300"
+elif command -v gtimeout >/dev/null 2>&1; then
+    _TIMEOUT_CMD="gtimeout 300"
+fi
+
 echo ""
-echo "==> Running mock test suite (timeout: 300s)..."
+if [ -n "$_TIMEOUT_CMD" ]; then
+    echo "==> Running mock test suite (timeout: 300s via $_TIMEOUT_CMD)..."
+else
+    echo "==> Running mock test suite (no timeout — install GNU coreutils for timeout enforcement)..."
+fi
+
 _PYTEST_LOG=$(mktemp)
-if timeout 300 .venv/bin/python -m pytest tests/ -x -q \
+trap 'rm -f "$_PYTEST_LOG"' EXIT INT TERM
+
+if $_TIMEOUT_CMD .venv/bin/python -m pytest tests/ -x -q \
     --ignore=tests/test_e2e_real.py \
     --ignore=tests/test_e2e_mcp_skill.py \
     --ignore=tests/test_tui_web.py \
     > "$_PYTEST_LOG" 2>&1; then
     tail -3 "$_PYTEST_LOG"
-    rm -f "$_PYTEST_LOG"
     echo ""
     echo "OK: tests pass"
 else
     _RC=$?
     tail -20 "$_PYTEST_LOG"
-    rm -f "$_PYTEST_LOG"
     echo ""
     if [ $_RC -eq 124 ]; then
         echo "FAIL: tests timed out after 300s"
