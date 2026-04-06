@@ -5,6 +5,39 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-py-typed-marker implemented (first SDK feature on rebased branch)
+
+First feature implemented after rebasing sdk-refactor onto main. Rebase merged 6 commits into main's reality (5 dropped as already-upstream, 1 conflict resolved on features.json by appending 17 SDK features to main's 6).
+
+Implementation:
+- Created empty calcifer/py.typed file (PEP 561 marker)
+- Added [tool.hatch.build.targets.wheel] packages = ['calcifer'] to pyproject.toml so the marker ships in the built wheel
+- Created tests/test_packaging.py with TWO tests:
+  - test_py_typed_marker_present: runtime path check (Path(calcifer.__file__).parent / 'py.typed').exists()
+  - test_pyproject_declares_py_typed_in_wheel: tomllib parses pyproject.toml and asserts [tool.hatch.build.targets.wheel] packages contains 'calcifer'
+
+The second test was added directly in response to the subagent reviewer's rule-8 footgun note: 'a lazy implementer could ship py.typed without the pyproject toml stanza and pass the runtime-path check'. The toml-parse test closes that loophole — both the file and the build config are now required.
+
+Workflow:
+- Step 1 (init.sh): clean tree, 458 mock tests pass
+- Step 2 (status): 23 features (16 plan_stub, 4 plan_drafting, 3 done)
+- Step 3 (resume): no in_progress
+- Step 4 (pick): sdk-py-typed-marker (highest-priority plan_drafting)
+- Step 5 (read contract): no TODOs, design references real files
+- Step 6 (review packet): 254 lines, all machine sanity OK except one WARN for the new test file
+- Step 7 (subagent review): fresh-context general-purpose agent verified rule 3 (no existing py.typed, no test_packaging.py, no [tool.hatch.build.targets.wheel] in pyproject), spot-checked design alignment with hatchling backend at pyproject:38-40, flagged the rule 8 footgun. Verdict: approved, high confidence
+- Step 8 (review-record): reviewer=subagent, verdict + footgun note recorded
+- Step 9 (implement): 3 file edits (touch py.typed, edit pyproject.toml, write test_packaging.py)
+- Step 10 (verify): 3/3 gate commands pass
+- Step 11 (log): this entry
+- Step 12 (complete): next
+
+Tests: 458 -> 460 (+2). No regressions.
+
+This is the second feature shipped via the new review gate (when-to-use-skill-field was the first). Both were canary cases — small, isolated, designed to exercise the workflow end-to-end. Both surfaced concrete generator notes from the rule-8 footgun checklist that improved the implementation. The pattern is working.
+
+---
+
 ## 2026-04-06 — when-to-use-skill-field implemented (first real run of new review gate)
 
 Canary feature to exercise the new plan-phase review gate end-to-end. Every stage of the workflow succeeded on first try.

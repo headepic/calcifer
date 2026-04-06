@@ -261,16 +261,16 @@
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "PEP 561 — https://peps.python.org/pep-0561/ (no Claude Code analog — purely Python packaging convention)",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "fd164a75dcbbf81b958c43f5f3f9a05d64710f9e",
+      "verified_tree": "60b9e1b716ba00a5",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Approved (high confidence). Verified: calcifer/py.typed does not exist, tests/test_packaging.py does not exist, pyproject.toml has no [tool.hatch.build.targets.wheel] section. Hatchling build backend confirmed at pyproject.toml:38-40. Reviewer flagged one footgun (rule 8): a lazy impl could ship just py.typed without the pyproject toml stanza and pass the runtime-path check. Generator note: add a tomllib-based assertion in test_packaging.py that verifies pyproject.toml declares py.typed via [tool.hatch.build.targets.wheel] packages or force-include.",
+      "reviewed_at": "2026-04-06T10:11:43+00:00",
+      "reviewed_contract_sha": "8a4e7e8703be9928",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-config-env-defaults",
