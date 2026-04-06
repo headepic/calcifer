@@ -5,6 +5,12 @@ One entry per session. Newest at the top.
 
 ---
 
+## 2026-04-06 — sdk-agent-run-sync implemented
+
+Added Agent.run_sync() — thin sync wrapper around run() using asyncio.run. Detects 'inside running loop' via asyncio.get_running_loop() and raises RuntimeError with 'cannot be called from inside' message. 2 new tests in test_p0.py. Mock tests 468 → 470 (+2).
+
+---
+
 ## 2026-04-06 — sdk-pyproject-metadata implemented
 
 Added full PyPI metadata + LICENSE file. version 0.2.0 → 0.3.0.dev0. Mock tests 465 → 468 (+3). Reviewer flagged license-form question (table vs SPDX string), recommended table form due to unpinned hatchling — followed exactly.

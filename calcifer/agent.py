@@ -401,6 +401,34 @@ class Agent:
             raise RuntimeError("Agent loop ended without producing a result")
         return result
 
+    def run_sync(
+        self,
+        prompt: str,
+        *,
+        messages: list[Message] | None = None,
+    ) -> AgentResult:
+        """Synchronous wrapper around run().
+
+        Convenience for sync scripts and REPLs. Internally uses
+        ``asyncio.run``, so it can NOT be called from inside an
+        already-running asyncio event loop — use ``await agent.run(...)``
+        directly in that case.
+
+        Raises:
+            RuntimeError: if called from within a running asyncio event loop.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop in this thread — safe to use asyncio.run
+            pass
+        else:
+            raise RuntimeError(
+                "Agent.run_sync() cannot be called from inside a running "
+                "asyncio event loop. Use `await agent.run(...)` instead."
+            )
+        return asyncio.run(self.run(prompt, messages=messages))
+
     # -- Streaming run --
 
     async def run_stream(

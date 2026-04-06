@@ -272,3 +272,38 @@ async def test_agent_max_turns():
         result = await agent.run("Loop forever")
 
     assert result.turn_count == 2
+
+
+# ────────────────────────────────────────────────────────────────────
+# run_sync wrapper (sdk-agent-run-sync)
+# ────────────────────────────────────────────────────────────────────
+
+
+def test_agent_run_sync_basic():
+    """run_sync wraps async run and returns AgentResult without await."""
+    import inspect
+    assert not inspect.iscoroutinefunction(Agent.run_sync), (
+        "run_sync should be sync, not a coroutine function"
+    )
+
+    agent = Agent(api_key="test-key")
+    mock_response = (
+        Message(role="assistant", content="Hello from sync!"),
+        Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+    )
+    with patch.object(
+        agent._provider, "chat_completion", new_callable=AsyncMock
+    ) as mock_chat:
+        mock_chat.return_value = mock_response
+        result = agent.run_sync("Hi")
+
+    assert result.final_text == "Hello from sync!"
+    assert result.turn_count == 1
+
+
+@pytest.mark.asyncio
+async def test_agent_run_sync_inside_loop_raises():
+    """Calling run_sync from inside a running asyncio loop raises clearly."""
+    agent = Agent(api_key="test-key")
+    with pytest.raises(RuntimeError, match="cannot be called from inside"):
+        agent.run_sync("Hi")

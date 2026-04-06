@@ -320,20 +320,21 @@
         "All 434 existing tests still pass"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from calcifer import Agent; import inspect; assert hasattr(Agent, 'run_sync'), 'run_sync missing'; assert not inspect.iscoroutinefunction(Agent.run_sync), 'run_sync should be sync'\"",
+        ".venv/bin/python -m pytest tests/ -q -k 'agent_run_sync_basic or agent_run_sync_inside_loop_raises'",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "Standard asyncio.run wrapping pattern; Anthropic SDK does similar.",
-      "status": "pending",
-      "passes": false,
-      "verified_sha": "",
-      "verified_tree": "",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b75fe63c7a8464b04a176a369d85e93e56ad4837",
+      "verified_tree": "67d032a8c0e36089",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Approved high confidence. Verified run_sync doesn't exist, asyncio already imported (agent.py:19), run defined at agent.py:384. test_p0.py doesn't have the proposed test names. Reviewer confirmed asyncio.get_running_loop() is the canonical detection idiom. final_text assertion in test_agent_run_sync_basic neutralizes the 'return coroutine unawaited' footgun.",
+      "reviewed_at": "2026-04-06T12:19:14+00:00",
+      "reviewed_contract_sha": "cff04453f72f9d84",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-pyproject-metadata",
