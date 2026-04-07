@@ -223,6 +223,21 @@ E2E 测试需要真实 LLM endpoint，默认排除。
 - [`docs/testing.md`](docs/testing.md) — `calcifer.testing` 模块使用指南
 - [`examples/`](examples/) — 可运行的 cookbook 示例
 
+## 应用（`apps/`）
+
+`apps/` 目录下是基于 Calcifer SDK 构建的独立应用。它们和 SDK 物理隔离：
+各自有 `pyproject.toml`，各自 `pip install -e`，SDK 安装时不会拉入。
+
+- [`apps/tui/`](apps/tui/) — 极简终端聊天 UI，`calcifer-tui` 命令
+
+装 SDK + TUI 的完整流程：
+
+```bash
+pip install -e .             # 装 SDK 本体
+pip install -e apps/tui      # 装 TUI（会在 venv 里找到已装好的 calcifer）
+calcifer-tui
+```
+
 ## 版本管理
 
 Calcifer 不发布到 PyPI，版本通过本仓库的 git tag 管理。当前 baseline：**`v0.3.0`**。
