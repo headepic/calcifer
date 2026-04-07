@@ -148,9 +148,8 @@ Provisional — the API may evolve in 0.x.
 Anything visible in `dir(calcifer)` but **not** in `calcifer.__all__`
 is internal. This includes (non-exhaustive):
 - Submodules: `calcifer.services`, `calcifer.skills`,
-  `calcifer.coordinator`, `calcifer.tui`, `calcifer.web`,
-  `calcifer.utils`, `calcifer.tools`, `calcifer.types`,
-  `calcifer.telemetry`, `calcifer.memdir`, `calcifer.tasks`
+  `calcifer.coordinator`, `calcifer.utils`, `calcifer.tools`,
+  `calcifer.types`, `calcifer.telemetry`
 - Implementation details under those submodules
 
 You can import from internal modules but Calcifer makes **no

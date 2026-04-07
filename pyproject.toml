@@ -12,30 +12,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-tui = [
-    "rich>=13.0",
-    "prompt-toolkit>=3.0",
-]
-web = [
-    "fastapi>=0.100",
-    "uvicorn>=0.20",
-]
-tiktoken = ["tiktoken>=0.7"]
 mcp = ["mcp>=1.0"]
 telemetry = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
-all = ["calcifer[tui,web,tiktoken,mcp,telemetry]"]
+all = ["calcifer[mcp,telemetry]"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
-    "calcifer[tui]",
 ]
-
-[project.scripts]
-calcifer = "calcifer.cli:main"
 
 [build-system]
 requires = ["hatchling"]

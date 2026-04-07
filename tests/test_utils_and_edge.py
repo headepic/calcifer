@@ -764,27 +764,6 @@ class TestShutdownManager:
 
 
 # ========================================
-# 9. Constants
-# ========================================
-
-from calcifer.constants import (
-    DEFAULT_MAX_TOOL_CONCURRENCY,
-    DEFAULT_MAX_RESULT_SIZE,
-    DEFAULT_MAX_CONTEXT_TOKENS,
-    DEFAULT_COMPACT_THRESHOLD,
-)
-
-
-class TestConstants:
-
-    def test_constants_values(self):
-        assert DEFAULT_MAX_TOOL_CONCURRENCY == 10
-        assert DEFAULT_MAX_RESULT_SIZE == 30_000
-        assert DEFAULT_MAX_CONTEXT_TOKENS == 128_000
-        assert 0 < DEFAULT_COMPACT_THRESHOLD < 1
-
-
-# ========================================
 # 10. Agent Edge Cases
 # ========================================
 

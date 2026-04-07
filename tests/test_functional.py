@@ -55,12 +55,10 @@ from calcifer import (
     tool,
 )
 from calcifer.coordinator import Coordinator, CoordinatorConfig
-from calcifer.memdir import MemoryEntry, MemoryStore, find_relevant_memories, format_memories_for_prompt
 from calcifer.services.compact.context import estimate_tokens, count_message_tokens
 from calcifer.services.hooks import HookInput, HookResult
 from calcifer.services.session import SessionStorage
 from calcifer.services.side_query import side_query, classify
-from calcifer.services.scheduler import Scheduler, cron_matches_now, _parse_cron_field
 from calcifer.services.tools.orchestrator import (
     StreamingToolExecutor,
     execute_tool_call,
@@ -75,7 +73,6 @@ from calcifer.skills import (
     apply_token_budget,
     discover_skill_dirs_for_paths,
 )
-from calcifer.tasks import Task, TaskManager, TaskOutput, TaskStatus
 from calcifer.tool_registry import get_all_builtin_tools, get_tools, assemble_tool_pool
 from calcifer.telemetry import (
     TracingManager,
@@ -680,158 +677,6 @@ class TestContextManagement:
         assert len(result) >= 3
 
 
-# ===== 7. Memory System =====
-
-class TestMemorySystem:
-
-    def test_memory_crud(self, tmp_path):
-        """Full CRUD cycle for memories."""
-        store = MemoryStore(tmp_path)
-        entry = MemoryEntry(
-            name="Test Memory",
-            description="A test memory entry",
-            type="feedback",
-            content="Remember to use type hints.",
-        )
-        path = store.save(entry)
-        assert Path(path).exists()
-
-        loaded = store.load(path)
-        assert loaded is not None
-        assert loaded.name == "Test Memory"
-        assert loaded.type == "feedback"
-        assert loaded.content == "Remember to use type hints."
-
-        # List
-        entries = store.list_memories()
-        assert len(entries) == 1
-
-        # Filter by type
-        assert len(store.list_memories("feedback")) == 1
-        assert len(store.list_memories("project")) == 0
-
-        # Search
-        results = store.search("type hints")
-        assert len(results) == 1
-
-        # Delete
-        assert store.delete(path)
-        assert len(store.list_memories()) == 0
-
-    def test_memory_index(self, tmp_path):
-        """Index file is created and updated."""
-        store = MemoryStore(tmp_path)
-        store.save(MemoryEntry(name="Entry1", description="First", type="user", content="Content1"))
-        store.save(MemoryEntry(name="Entry2", description="Second", type="project", content="Content2"))
-
-        index_path = tmp_path / "MEMORY.md"
-        assert index_path.exists()
-        content = index_path.read_text()
-        assert "Entry1" in content
-        assert "Entry2" in content
-
-    def test_find_relevant_memories(self, tmp_path):
-        """Keyword-based memory retrieval."""
-        store = MemoryStore(tmp_path)
-        store.save(MemoryEntry(name="Python Tips", description="Python coding tips", type="feedback", content="Use dataclasses"))
-        store.save(MemoryEntry(name="Go Tips", description="Go coding tips", type="feedback", content="Use goroutines"))
-
-        results = find_relevant_memories(store, "python coding")
-        assert len(results) >= 1
-        assert results[0].name == "Python Tips"
-
-    def test_format_memories_for_prompt(self, tmp_path):
-        """Memories format correctly for system prompt."""
-        entries = [
-            MemoryEntry(name="M1", description="d1", type="user", content="Content 1"),
-            MemoryEntry(name="M2", description="d2", type="project", content="Content 2"),
-        ]
-        text = format_memories_for_prompt(entries)
-        assert "M1" in text
-        assert "M2" in text
-        assert "Content 1" in text
-
-    def test_format_memories_empty(self):
-        assert format_memories_for_prompt([]) == ""
-
-
-# ===== 8. Task System =====
-
-class TestTaskSystem:
-
-    @pytest.mark.asyncio
-    async def test_task_lifecycle(self):
-        """Task goes through pending → running → completed."""
-        mgr = TaskManager()
-        task = mgr.create_task("test-task")
-        assert task.status == TaskStatus.PENDING
-
-        async def do_work(t):
-            return "result"
-
-        await mgr.run_task(task.id, do_work)
-        task = await mgr.wait_for_task(task.id, timeout=5)
-        assert task.status == TaskStatus.COMPLETED
-        assert task.result == "result"
-
-    @pytest.mark.asyncio
-    async def test_task_failure(self):
-        """Failed task has error state."""
-        mgr = TaskManager()
-        task = mgr.create_task("fail-task")
-
-        async def do_work(t):
-            raise RuntimeError("boom")
-
-        await mgr.run_task(task.id, do_work)
-        task = await mgr.wait_for_task(task.id, timeout=5)
-        assert task.status == TaskStatus.FAILED
-        assert "boom" in task.error
-
-    @pytest.mark.asyncio
-    async def test_task_kill(self):
-        """Killed task transitions correctly."""
-        mgr = TaskManager()
-        task = mgr.create_task("kill-task")
-
-        async def do_work(t):
-            await asyncio.sleep(100)
-            return "never"
-
-        await mgr.run_task(task.id, do_work)
-        # Give it a moment to start
-        await asyncio.sleep(0.01)
-        assert mgr.kill_task(task.id)
-        await asyncio.sleep(0.1)
-        assert task.status == TaskStatus.KILLED
-
-    def test_task_list(self):
-        mgr = TaskManager()
-        mgr.create_task("task1")
-        mgr.create_task("task2")
-        mgr.create_task("task3")
-        assert len(mgr.list_tasks()) == 3
-        assert len(mgr.list_tasks(status=TaskStatus.PENDING)) == 3
-
-    def test_task_output(self, tmp_path):
-        """TaskOutput writes and reads incrementally."""
-        out = TaskOutput("test_123")
-        out.write("line 1\n")
-        out.write("line 2\n")
-        content = out.read_all()
-        assert "line 1" in content
-        assert "line 2" in content
-
-        # Incremental read
-        delta, offset = out.read_delta(0)
-        assert "line 1" in delta
-        delta2, offset2 = out.read_delta(offset)
-        assert delta2 == ""  # Nothing new
-        assert offset2 == offset
-
-        out.cleanup()
-
-
 # ===== 9. Hook System =====
 
 class TestHookSystem:
@@ -1224,37 +1069,6 @@ mcp_servers:
         assert len(config.mcp_servers) == 1
         assert config.mcp_servers[0].name == "test-server"
         assert config.mcp_servers[0].command == "/usr/bin/test"
-
-
-# ===== 14. Scheduler =====
-
-class TestScheduler:
-
-    def test_parse_cron_field_star(self):
-        result = _parse_cron_field("*", 0, 59)
-        assert result == list(range(0, 60))
-
-    def test_parse_cron_field_single(self):
-        assert _parse_cron_field("5", 0, 59) == [5]
-
-    def test_parse_cron_field_range(self):
-        assert _parse_cron_field("1-5", 0, 59) == [1, 2, 3, 4, 5]
-
-    def test_parse_cron_field_step(self):
-        result = _parse_cron_field("*/15", 0, 59)
-        assert result == [0, 15, 30, 45]
-
-    def test_scheduler_crud(self, tmp_path):
-        sched = Scheduler(tmp_path)
-        task = sched.create(name="daily-check", cron="0 9 * * *", prompt="Check status")
-        assert task.name == "daily-check"
-        assert task.cron == "0 9 * * *"
-
-        tasks = sched.list_tasks()
-        assert len(tasks) == 1
-
-        assert sched.delete(task.id)
-        assert len(sched.list_tasks()) == 0
 
 
 # ===== 15. Telemetry (noop mode) =====

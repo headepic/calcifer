@@ -13,7 +13,6 @@ pip install -e /path/to/calcifer-sdk
 # 可选 extras
 pip install -e "/path/to/calcifer-sdk[mcp]"        # MCP client
 pip install -e "/path/to/calcifer-sdk[telemetry]"  # OpenTelemetry
-pip install -e "/path/to/calcifer-sdk[tui,web]"    # 旧的 TUI/Web 前端（非 SDK 必须）
 pip install -e "/path/to/calcifer-sdk[dev]"        # pytest
 ```
 
@@ -106,11 +105,10 @@ assert result.final_text == "hello!"
 pip install -e ".[dev]"
 .venv/bin/python -m pytest tests/ -q \
   --ignore=tests/test_e2e_real.py \
-  --ignore=tests/test_e2e_mcp_skill.py \
-  --ignore=tests/test_tui_web.py
+  --ignore=tests/test_e2e_mcp_skill.py
 ```
 
-458 mock 测试。E2E 和 TUI 测试默认排除。
+E2E 测试默认排除（需要真实 LLM endpoint）。
 
 ## 许可证
 
