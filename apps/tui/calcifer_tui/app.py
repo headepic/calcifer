@@ -16,7 +16,7 @@ Run:
     export OPENAI_API_KEY=sk-...
     export OPENAI_BASE_URL=https://api.openai.com/v1   # optional
     export OPENAI_MODEL=gpt-4o-mini                    # optional
-    python -m tui
+    python -m calcifer_tui
 """
 from __future__ import annotations
 

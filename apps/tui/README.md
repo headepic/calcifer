@@ -5,7 +5,7 @@
 位于 `apps/tui/`，和 `calcifer/` 包**物理隔离**：
 
 - 独立的 `pyproject.toml`
-- 独立的 package 名（`tui`，不在 `calcifer.__all__` 里）
+- 独立的 package 名（`calcifer_tui`，不在 `calcifer.__all__` 里）
 - 单向依赖：TUI `from calcifer import ...`，SDK 完全不知道 TUI 存在
 - 装 SDK 不会拉这个 TUI
 
@@ -47,7 +47,7 @@ export OPENAI_MODEL=gpt-4o-mini                    # 可选
 
 calcifer-tui
 # 或
-python -m tui
+python -m calcifer_tui
 ```
 
 接 Ollama / vLLM / 本地 endpoint：
@@ -67,11 +67,11 @@ Calcifer TUI — minimal terminal agent chat
 
 you › 列出当前目录下的 .py 文件
   → glob {"pattern": "*.py"}
-  ← ["apps/tui/tui/app.py", ...]
+  ← ["apps/tui/calcifer_tui/app.py", ...]
 calcifer › 当前目录下有以下 Python 文件：
 
-- apps/tui/tui/app.py
-- apps/tui/tui/__main__.py
+- apps/tui/calcifer_tui/app.py
+- apps/tui/calcifer_tui/__main__.py
 - ...
 turns=2 tokens=387 cost=$0.000087
 
@@ -108,7 +108,7 @@ Ctrl+C 处理用 `asyncio.add_signal_handler` 在每个 turn 开始时临时挂 
 apps/tui/
 ├── README.md
 ├── pyproject.toml
-└── tui/
+└── calcifer_tui/
     ├── __init__.py
     ├── __main__.py
     └── app.py          # 全部 TUI 逻辑在这里
