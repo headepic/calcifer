@@ -3,44 +3,43 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Provider-agnostic Python Agent Runner SDK. Mirrors the core mechanisms of
-Claude Code's agent runner, targeting any OpenAI-compatible
-`/v1/chat/completions` endpoint (OpenAI, Ollama, vLLM, DeepSeek, …).
+Provider-agnostic 的 Python Agent Runner SDK。复刻 Claude Code Agent Runner 的核心机制，
+对接任意 OpenAI 兼容 `/v1/chat/completions` endpoint（OpenAI、Ollama、vLLM、DeepSeek 等）。
 
-> Calcifer is not published to PyPI — install directly from this repo.
+> Calcifer 不发布到 PyPI，直接从本仓库安装。
 
-## Highlights
+## 特性一览
 
-- **Unified agent loop** with `run()` / `run_sync()` / `run_stream()`
-- **Error recovery cascade** — `prompt_too_long` → compact; `max_output_tokens` → token expand / resume; `429 / 529` → exponential backoff + model fallback
-- **8 built-in tools** — Bash, FileRead/Write/Edit, Glob, Grep, SkillTool, ToolSearchTool
-- **6-layer context compaction pipeline** — tool-budget → trim → micro-compact → autocompact → fold → emergency
-- **MCP client** — stdio / SSE / HTTP / WebSocket transports, OAuth refresh, session rebuild
-- **Skill system** — Markdown + YAML frontmatter, conditional activation, inline / fork execution
-- **Multi-agent coordination** via `Coordinator`
-- **Lifecycle hooks** — PreToolUse / PostToolUse / Stop / …
-- **Telemetry** — `CostTracker` + OpenTelemetry spans & metrics (opt-in)
-- **First-class testing** — `calcifer.testing.MockProvider` + assertion helpers, `Agent(provider=...)` injection seam
-- **Type-checked** — ships `py.typed` (PEP 561), downstream `mypy` / `pyright` see real types
+- **统一的 Agent 循环**：`run()` / `run_sync()` / `run_stream()` 三种入口共用同一套 loop
+- **错误恢复级联**：`prompt_too_long` → 压缩；`max_output_tokens` → 扩容 / resume；`429 / 529` → 指数退避 + 模型降级
+- **8 个内置工具**：Bash、FileRead、FileWrite、FileEdit、Glob、Grep、SkillTool、ToolSearchTool
+- **6 层上下文压缩管线**：tool-budget → 裁剪 → 微压缩 → autocompact → fold → 应急
+- **MCP 客户端**：支持 stdio / SSE / HTTP / WebSocket 四种 transport，OAuth token refresh，session 过期自动重建
+- **Skill 系统**：Markdown + YAML frontmatter，基于 path glob 的条件激活，inline / fork 执行模式
+- **多 Agent 协调**：`Coordinator` 并行 worker + 独立上下文 + 共享 scratchpad
+- **生命周期 Hooks**：PreToolUse / PostToolUse / Stop / Notify 等
+- **Telemetry**：`CostTracker` + OpenTelemetry spans 和 metrics（按需启用）
+- **一等公民的测试支持**：`calcifer.testing.MockProvider` + 断言辅助 + `Agent(provider=...)` 注入位
+- **类型检查友好**：随包提供 `py.typed`（PEP 561），下游 `mypy` / `pyright` 看到真实类型
 
-## Install
+## 安装
 
-Requires Python ≥ 3.11.
+需要 Python ≥ 3.11。
 
 ```bash
-# Install directly from GitHub (recommended: pin to a tag)
+# 直接从 GitHub 安装（推荐 pin 到 tag）
 pip install "git+https://github.com/headepic/calcifer.git@v0.3.0"
 
-# Or follow main
+# 或者跟随 main 分支滚动
 pip install "git+https://github.com/headepic/calcifer.git@main"
 
-# Optional extras
-pip install "calcifer[mcp] @ git+https://github.com/headepic/calcifer.git@v0.3.0"        # MCP client
+# 可选 extras
+pip install "calcifer[mcp] @ git+https://github.com/headepic/calcifer.git@v0.3.0"        # MCP 客户端
 pip install "calcifer[telemetry] @ git+https://github.com/headepic/calcifer.git@v0.3.0"  # OpenTelemetry
 pip install "calcifer[dev] @ git+https://github.com/headepic/calcifer.git@v0.3.0"        # pytest
 ```
 
-For local development, clone and install editable:
+如果要本地开发，clone 下来以 editable 方式安装：
 
 ```bash
 git clone https://github.com/headepic/calcifer.git
@@ -48,7 +47,7 @@ cd calcifer
 pip install -e ".[dev]"
 ```
 
-## 30-second hello world
+## 30 秒上手
 
 ```python
 import asyncio
@@ -57,16 +56,16 @@ from calcifer import Agent
 async def main():
     agent = Agent(
         api_key="sk-...",
-        base_url="https://api.openai.com/v1",   # or http://localhost:11434/v1, etc.
+        base_url="https://api.openai.com/v1",   # 或 http://localhost:11434/v1 等
         model="gpt-4o-mini",
     )
-    result = await agent.run("Explain the Python GIL in one sentence.")
+    result = await agent.run("用一句话解释 Python 的 GIL。")
     print(result.final_text)
 
 asyncio.run(main())
 ```
 
-Or the synchronous variant:
+同步版本：
 
 ```python
 from calcifer import Agent
@@ -74,38 +73,37 @@ result = Agent(api_key="...", model="...").run_sync("hi")
 print(result.final_text)
 ```
 
-If `base_url` is omitted, Calcifer reads `OPENAI_BASE_URL` from the
-environment and falls back to `https://api.openai.com/v1`.
+如果不传 `base_url`，Calcifer 会读 `OPENAI_BASE_URL` 环境变量，回退到
+`https://api.openai.com/v1`。
 
-## Custom tools
+## 自定义工具
 
 ```python
 from calcifer import Agent, tool
 
-@tool(name="add", description="Add two integers")
+@tool(name="add", description="两个整数相加")
 def add(a: int, b: int) -> str:
     return str(a + b)
 
 agent = Agent(api_key="...", model="...", tools=[add])
-result = await agent.run("What is 7 plus 8?")
+result = await agent.run("7 加 8 等于几？")
 ```
 
-The agent loop automatically decides when to call the tool, executes it,
-feeds the result back into the conversation, and continues until the model
-produces a final answer.
+Agent 循环会自动决定何时调用工具、执行工具、把结果注入上下文，然后继续
+循环直到模型给出最终回复。
 
-## Streaming
+## 流式输出
 
 ```python
-async for event in agent.run_stream("Write a four-line poem."):
+async for event in agent.run_stream("写一首四行的诗。"):
     if event.type == "text_delta":
         print(event.text, end="", flush=True)
 ```
 
-Event types: `text_delta` / `tool_call_delta` / `tool_result` / `turn_start` /
-`turn_end` / `usage` / `finish`.
+事件类型：`text_delta` / `tool_call_delta` / `tool_result` / `turn_start` /
+`turn_end` / `usage` / `finish`。
 
-## Testing agents offline
+## 离线测试 Agent（无需真实 LLM）
 
 ```python
 from calcifer import Agent
@@ -118,15 +116,14 @@ result = await agent.run("hi")
 assert result.final_text == "Hello!"
 ```
 
-`MockProvider` is a duck-typed fake `LLMProvider` injected via `Agent(provider=...)`.
-It supports canned text responses, canned tool-call responses, multi-turn
-queues, and exhaustion policies (`raise` / `repeat`). It ships with
-`assert_tool_called(result, name, args_contains=...)` and
-`assert_message_count(result, count=..., role=...)`.
+`MockProvider` 是一个 duck-typed 的假 `LLMProvider`，通过 `Agent(provider=...)`
+注入。支持预置文本响应、预置工具调用响应、多轮队列、耗尽策略（`raise` / `repeat`）。
+配套 `assert_tool_called(result, name, args_contains=...)` 和
+`assert_message_count(result, count=..., role=...)` 两个断言辅助。
 
-See [`docs/testing.md`](docs/testing.md) for the full guide.
+完整用法见 [`docs/testing.md`](docs/testing.md)。
 
-## Connecting an MCP server
+## 接入 MCP server
 
 ```python
 from calcifer import Agent, CalciferConfig, MCPServerConfig
@@ -145,76 +142,69 @@ config = CalciferConfig(
 )
 agent = Agent(config=config)
 await agent.connect_mcp_servers()
-result = await agent.run("List the .txt files under /tmp.")
+result = await agent.run("列出 /tmp 下的所有 .txt 文件。")
 ```
 
-Four transports supported (stdio / SSE / HTTP / WebSocket), with OAuth token
-refresh and session rebuild on expiry. Install with the `[mcp]` extra.
+支持 4 种 transport（stdio / SSE / HTTP / WebSocket），OAuth token 自动刷新，
+session 过期自动重建。需要安装 `[mcp]` extra。
 
-## Architecture
+## 架构
 
 ```
 Agent(run / run_sync / run_stream)
   │
-  ├── LLMProvider           OpenAI-compatible /v1/chat/completions; exponential
-  │                         backoff; retry-after; 429/529 fallback; transparent
-  │                         streaming fallback when an endpoint returns
-  │                         empty content in non-streaming mode
+  ├── LLMProvider           OpenAI 兼容 /v1/chat/completions；指数退避；retry-after；
+  │                         429/529 降级；非流式响应返回空 content 时自动 fallback
+  │                         到流式模式（sticky flag，后续调用直接走流式）
   │
-  ├── ContextManager        6-layer pipeline: tool-budget → trim → micro-compact
-  │                         → autocompact → context-fold → emergency. Recovers
-  │                         recently-read files / active Skills / MCP tools
-  │                         after compaction
+  ├── ContextManager        6 层压缩管线：tool-budget → 裁剪 → 微压缩 → autocompact
+  │                         → context-fold → 应急。压缩后自动恢复最近读取的文件 /
+  │                         激活的 Skill / MCP 工具列表
   │
-  ├── StreamingToolExecutor Launches tools as soon as their arguments are fully
-  │                         streamed; concurrency-safe tools run in parallel,
-  │                         write tools run serially; read-only tools are
-  │                         interruptible, writes must finish
+  ├── StreamingToolExecutor 工具参数一流式完成就立即启动执行；concurrency_safe 的
+  │                         工具并行，写入型工具串行；只读工具可中断，写入必须跑完
   │
-  ├── Built-in tools        Bash, FileRead, FileWrite, FileEdit, Glob, Grep,
-  │                         SkillTool, ToolSearchTool
+  ├── 内置工具              Bash、FileRead、FileWrite、FileEdit、Glob、Grep、
+  │                         SkillTool、ToolSearchTool
   │
-  ├── MCP client            stdio/SSE/HTTP/WS transport, OAuth refresh, tool
-  │                         schema caching, 200 K content cap
+  ├── MCP 客户端            stdio/SSE/HTTP/WS 四种 transport，OAuth refresh，
+  │                         工具 schema 缓存，单次内容 200K 上限
   │
-  ├── Skill system          Markdown + YAML frontmatter, conditional activation
-  │                         by path globs, inline / fork execution, variable
-  │                         substitution ($ARGUMENTS, $1..$N)
+  ├── Skill 系统            Markdown + YAML frontmatter，基于 path glob 的条件激活，
+  │                         inline / fork 两种执行模式，变量替换（$ARGUMENTS、$1..$N）
   │
-  ├── Coordinator           Multi-agent orchestration with isolated contexts,
-  │                         restricted tool sets, shared scratchpad
+  ├── Coordinator           多 agent 编排：worker 拥有独立 context、受限工具集、
+  │                         共享 scratchpad 目录
   │
-  ├── HookManager           PreToolUse / PostToolUse / Stop / Notify lifecycle
-  │                         hooks
+  ├── HookManager           PreToolUse / PostToolUse / Stop / Notify 生命周期 hook
   │
-  ├── SessionStorage        Disk-backed transcripts with resume / crash recovery
+  ├── SessionStorage        对话 transcript 存盘，支持 resume 和崩溃恢复
   │
-  └── Telemetry             CostTracker, OpenTelemetry spans & metrics (opt-in)
+  └── Telemetry             CostTracker + OpenTelemetry spans 和 metrics（opt-in）
 ```
 
-## Examples
+## 示例
 
-| File | Description | Requires live LLM |
+| 文件 | 说明 | 需要真实 LLM |
 |---|---|---|
-| [`examples/01_hello.py`](examples/01_hello.py) | Minimal agent call | ✅ |
-| [`examples/02_tool.py`](examples/02_tool.py) | `@tool` decorator + multi-step tool use | ✅ |
-| [`examples/03_stream.py`](examples/03_stream.py) | `run_stream()` streaming output | ✅ |
-| [`examples/04_testing.py`](examples/04_testing.py) | `MockProvider` offline testing | ❌ |
-| [`examples/05_mcp.py`](examples/05_mcp.py) | Connecting to an MCP filesystem server | ✅ + Node.js |
+| [`examples/01_hello.py`](examples/01_hello.py) | 最小的 Agent 调用 | ✅ |
+| [`examples/02_tool.py`](examples/02_tool.py) | `@tool` 装饰器 + 多步工具调用 | ✅ |
+| [`examples/03_stream.py`](examples/03_stream.py) | `run_stream()` 流式输出 | ✅ |
+| [`examples/04_testing.py`](examples/04_testing.py) | `MockProvider` 离线测试 | ❌ |
+| [`examples/05_mcp.py`](examples/05_mcp.py) | 接入 MCP filesystem server | ✅ + Node.js |
 
-Examples that hit a real LLM read configuration from environment variables:
+需要真实 LLM 的示例通过环境变量配置：
 
 ```bash
 export OPENAI_API_KEY=sk-...
-export OPENAI_BASE_URL=https://api.openai.com/v1   # optional
-export OPENAI_MODEL=gpt-4o-mini                    # optional
+export OPENAI_BASE_URL=https://api.openai.com/v1   # 可选
+export OPENAI_MODEL=gpt-4o-mini                    # 可选
 python examples/01_hello.py
 ```
 
-Point `OPENAI_BASE_URL` at Ollama, vLLM, or any other OpenAI-compatible
-server to use it instead.
+把 `OPENAI_BASE_URL` 指向 Ollama、vLLM 或其他 OpenAI 兼容服务即可切换后端。
 
-## Tests
+## 测试
 
 ```bash
 pip install -e ".[dev]"
@@ -223,43 +213,40 @@ pytest tests/ -q \
   --ignore=tests/test_e2e_mcp_skill.py
 ```
 
-426 mock tests cover the agent loop, context pipeline, tool orchestration,
-MCP client, Skill system, hooks, Coordinator, side query, testing module,
-and streaming fallback. E2E tests hit real LLM endpoints and are excluded
-by default.
+426 个 mock 测试覆盖 agent 循环、上下文压缩管线、工具编排、MCP 客户端、
+Skill 系统、Hook、Coordinator、side query、testing 模块、流式 fallback 等。
+E2E 测试需要真实 LLM endpoint，默认排除。
 
-## Documentation
+## 文档
 
-- [`docs/public-api.md`](docs/public-api.md) — public API surface and stability tiers
-- [`docs/testing.md`](docs/testing.md) — `calcifer.testing` module guide
-- [`examples/`](examples/) — runnable cookbook examples
+- [`docs/public-api.md`](docs/public-api.md) — 公开 API 表面和稳定性等级
+- [`docs/testing.md`](docs/testing.md) — `calcifer.testing` 模块使用指南
+- [`examples/`](examples/) — 可运行的 cookbook 示例
 
-## Versioning
+## 版本管理
 
-Calcifer is not published to PyPI. Versioning is managed through git tags
-in this repository. Current baseline: **`v0.3.0`**.
+Calcifer 不发布到 PyPI，版本通过本仓库的 git tag 管理。当前 baseline：**`v0.3.0`**。
 
-Pin to a tag in your consumer project:
+在你的消费项目里 pin 到 tag：
 
 ```bash
 pip install "git+https://github.com/headepic/calcifer.git@v0.3.0"
 ```
 
-## Status
+## 项目定位
 
-Single-maintainer project, developed in the open for self-use. Issues and
-pull requests are welcome, but please understand that review bandwidth is
-limited and the scope is intentionally narrow: stay close to Claude Code's
-core mechanisms, target OpenAI-compatible APIs only.
+这是一个单人维护的项目，面向 Claude Code 核心机制的 Python 复刻，在开源模式下
+自用为主。Issue 和 PR 欢迎，但请理解维护带宽有限，且项目范围是有意保持收敛的：
+贴近 Claude Code 的核心机制，只对接 OpenAI 兼容 API。
 
-**Non-goals** (intentional omissions):
+**明确不做**（有意为之的 non-goals）：
 
-- Anthropic-proprietary features (`cache_control`, beta headers, prompt caching)
-- Anthropic SDK as a dependency
-- Multi-provider abstraction (use `pi-ai` or `litellm` if you need 20+ providers)
-- Built-in TUI / web UI / CLI (this is a library, not an application)
-- Tool permission / sandboxing system
+- Anthropic 专属特性（`cache_control`、beta headers、prompt caching）
+- 把 Anthropic SDK 作为依赖
+- 多 provider 抽象层（需要 20+ provider 请用 `pi-ai` 或 `litellm`）
+- 内置 TUI / Web UI / CLI（这是一个库，不是应用）
+- Tool permission / sandbox 系统
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — 见 [LICENSE](LICENSE)。
