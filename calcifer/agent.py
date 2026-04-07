@@ -375,16 +375,26 @@ class Agent:
     def _check_token_budget(
         self, turn_count: int, deltas: list[int]
     ) -> bool:
-        """Check if we should stop based on diminishing output.
+        """Check if we should stop based on diminishing text output.
+
+        Only counts turns where the assistant produced *text* content.
+        Pure tool-calling turns (content=None, tool_calls=[...]) are
+        legitimate progress — the LLM only needs a tiny JSON blob to
+        issue a tool call, so their completion_tokens are naturally
+        small. Counting them against the diminishing threshold would
+        prematurely kill any agent that explores via multiple
+        sequential tool calls before synthesizing a final answer.
 
         Returns True if we should stop.
-        Like Claude Code's COMPLETION_THRESHOLD + DIMINISHING_THRESHOLD.
+        Like Claude Code's COMPLETION_THRESHOLD + DIMINISHING_THRESHOLD,
+        but with the tool-call exemption.
         """
-        if turn_count < DIMINISHING_TURNS:
+        # Not enough text-producing turns seen yet to decide
+        if len(deltas) < DIMINISHING_TURNS:
             return False
         recent = deltas[-DIMINISHING_TURNS:]
         if all(d < DIMINISHING_THRESHOLD for d in recent):
-            logger.info("Stopping: diminishing output (%s)", recent)
+            logger.info("Stopping: diminishing text output (%s)", recent)
             return True
         return False
 
@@ -817,8 +827,14 @@ class Agent:
                 yield StreamEvent(type="turn_end", turn=turn_count)
                 break
 
-            # Token budget check
-            if turn_usage:
+            # Token budget check. Only track completion_tokens for turns
+            # whose assistant message contained text — pure tool-call
+            # turns are exempt because their completion counts are
+            # naturally tiny (just the tool_calls JSON) and would
+            # false-positive the diminishing-output heuristic, killing
+            # the loop before the model can synthesize a final answer
+            # from the tool results. See _check_token_budget().
+            if turn_usage and assistant_msg.content:
                 completion_deltas.append(turn_usage.completion_tokens)
             if self._check_token_budget(turn_count, completion_deltas):
                 yield StreamEvent(type="turn_end", turn=turn_count)

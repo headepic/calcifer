@@ -270,7 +270,21 @@ class TestAgentLoop:
 
     @pytest.mark.asyncio
     async def test_diminishing_output_stop(self):
-        """Agent stops when output becomes diminishing."""
+        """Agent stops when *text* output becomes diminishing.
+
+        Only turns whose assistant message carries text content count
+        against the diminishing-output budget. Pure tool-calling turns
+        (content=None, tool_calls=[...]) are exempt — they legitimately
+        have small completion_tokens (just the tool_calls JSON blob)
+        and counting them would kill any agent exploring a codebase
+        via several sequential tool calls before it can synthesize a
+        final answer. See tests/test_tool_call_loop_not_diminishing.py
+        for the companion regression test.
+
+        Scenario here: the assistant produces a short narrating text
+        AND a tool call on every turn. Three such turns in a row with
+        tiny text output should trip the heuristic.
+        """
         config = CalciferConfig(api_key="test", max_turns=10)
         agent = Agent(config=config, tools=[add_tool])
 
@@ -279,9 +293,12 @@ class TestAgentLoop:
             nonlocal call_count
             call_count += 1
             return (
-                make_assistant_msg(tool_calls=[
-                    ToolCall(id=f"tc_{call_count}", function_name="add", arguments='{"a": 1, "b": 1}')
-                ]),
+                make_assistant_msg(
+                    content="ok",  # tiny text on every turn — the thing we're catching
+                    tool_calls=[
+                        ToolCall(id=f"tc_{call_count}", function_name="add", arguments='{"a": 1, "b": 1}')
+                    ],
+                ),
                 Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),  # Very low output
             )
 
