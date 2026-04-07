@@ -1,0 +1,30 @@
+[project]
+name = "calcifer-ask"
+version = "0.1.0"
+description = "One-shot codebase Q&A CLI built on Calcifer SDK"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "calcifer>=0.3",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[project.scripts]
+ask = "ask.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ask"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
