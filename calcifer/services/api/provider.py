@@ -93,6 +93,12 @@ class LLMProvider:
             timeout=timeout,
         )
         self._consecutive_529s = 0
+        # Sticky flag set after we observe an OpenAI-compatible endpoint
+        # that returns content=null in non-streaming mode despite having
+        # generated tokens. Once detected, all subsequent chat_completion
+        # calls go straight to streaming + accumulate, avoiding the wasted
+        # round-trip.
+        self._force_stream_for_chat_completion = False
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -138,6 +144,66 @@ class LLMProvider:
         except (ValueError, TypeError):
             return None
 
+    async def _chat_completion_via_stream(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        model_override: str | None = None,
+        max_tokens_override: int | None = None,
+    ) -> tuple[Message, Usage]:
+        """Drive chat_completion_stream() and accumulate the deltas into
+        the same (Message, Usage) tuple chat_completion() would return.
+
+        Used as a fallback when an endpoint returns content=null in
+        non-streaming mode, and as the fast path on subsequent calls
+        once that quirk has been observed.
+        """
+        text_parts: list[str] = []
+        stream_tool_calls: dict[int, dict[str, str]] = {}
+        stream_usage: Usage | None = None
+        finish_reason: str | None = None
+        async for event in self.chat_completion_stream(
+            messages=messages,
+            tools=tools,
+            model_override=model_override,
+            max_tokens_override=max_tokens_override,
+        ):
+            if event.type == "text_delta" and event.text:
+                text_parts.append(event.text)
+            elif event.type == "tool_call_delta":
+                idx = event.tool_call_index or 0
+                acc = stream_tool_calls.setdefault(
+                    idx, {"id": "", "name": "", "arguments": ""}
+                )
+                if event.tool_call_id:
+                    acc["id"] = event.tool_call_id
+                if event.tool_call_name:
+                    acc["name"] = event.tool_call_name
+                if event.tool_call_arguments:
+                    acc["arguments"] += event.tool_call_arguments
+            elif event.type == "usage" and event.usage:
+                stream_usage = event.usage
+            elif event.type == "finish":
+                finish_reason = event.finish_reason
+
+        recovered_calls = [
+            ToolCall(
+                id=acc["id"],
+                function_name=acc["name"],
+                arguments=acc["arguments"],
+            )
+            for acc in (stream_tool_calls[i] for i in sorted(stream_tool_calls))
+            if acc["id"]
+        ]
+        msg = Message(
+            role="assistant",
+            content="".join(text_parts) or None,
+            tool_calls=recovered_calls,
+        )
+        if finish_reason == "length":
+            msg.metadata["api_error"] = "max_output_tokens"
+        return msg, stream_usage or Usage()
+
     async def chat_completion(
         self,
         messages: list[Message],
@@ -149,6 +215,17 @@ class LLMProvider:
 
         Returns (assistant_message, usage).
         """
+        # Fast path: if a previous call already revealed this endpoint
+        # silently drops content in non-streaming mode, route directly
+        # through the streaming accumulator.
+        if self._force_stream_for_chat_completion:
+            return await self._chat_completion_via_stream(
+                messages=messages,
+                tools=tools,
+                model_override=model_override,
+                max_tokens_override=max_tokens_override,
+            )
+
         body = self._build_request_body(
             messages, tools, stream=False,
             model_override=model_override,
@@ -227,7 +304,33 @@ class LLMProvider:
             raise last_error or LLMProviderError("Max retries exceeded")
 
         data = resp.json()
-        return self._parse_response(data)
+        msg, usage = self._parse_response(data)
+
+        # Endpoint-quirk fallback: some OpenAI-compatible proxies (notably
+        # certain local gateways) return `content: null` with no tool_calls
+        # in non-streaming mode even when completion_tokens > 0 — the visible
+        # text is only emitted via SSE. If we see that pattern, set a sticky
+        # flag and retry via streaming. Subsequent calls skip the wasted
+        # non-streaming round-trip.
+        if (
+            (msg.content is None or msg.content == "")
+            and not msg.tool_calls
+            and usage.completion_tokens > 0
+        ):
+            logger.warning(
+                "Non-streaming response had empty content with %d completion tokens; "
+                "switching this provider to streaming-only for chat_completion.",
+                usage.completion_tokens,
+            )
+            self._force_stream_for_chat_completion = True
+            return await self._chat_completion_via_stream(
+                messages=messages,
+                tools=tools,
+                model_override=model_override,
+                max_tokens_override=max_tokens_override,
+            )
+
+        return msg, usage
 
     def _parse_response(self, data: dict[str, Any]) -> tuple[Message, Usage]:
         """Parse a chat completion response into Message + Usage."""
