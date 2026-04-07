@@ -12,7 +12,7 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
 - **Anthropic 专属特性不实现** — cache_control、beta headers、prompt caching 等
 - **自用为主** — 不发布到 PyPI，无 CHANGELOG / release 流程
 
-参考实现位于 `/Users/jowang/Documents/github/claude-code-source/`。
+参考实现（如果已 clone 到本地）位于 `../claude-code-source/` 或你本机对应路径。
 
 ## 技术规范
 
@@ -53,4 +53,4 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
 - `README.md` — 项目功能和使用
 - `docs/public-api.md` — 公开 API 列表
 - `docs/testing.md` — `calcifer.testing` 用法
-- `/Users/jowang/Documents/github/claude-code-source/` — 参考实现源码
+- `../claude-code-source/`（本地 clone）— 参考实现源码
