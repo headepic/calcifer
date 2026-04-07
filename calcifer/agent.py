@@ -107,6 +107,7 @@ class Agent:
         max_turns: int = 100,
         system_prompt: str = "",
         tools: list[Tool] | None = None,
+        provider: LLMProvider | None = None,
     ):
         if config is not None:
             self._config = config
@@ -139,14 +140,22 @@ class Agent:
             )
             extra_params.update(thinking.to_api_params())
 
-        self._provider = LLMProvider(
-            api_key=self._config.api_key,
-            base_url=self._config.base_url,
-            model=self._config.model,
-            max_tokens=self._config.max_tokens,
-            temperature=self._config.temperature,
-            extra_params=extra_params,
-        )
+        if provider is not None:
+            # Injection seam for testing: skip LLMProvider construction
+            # entirely and use the caller-supplied object. Duck-typed —
+            # the injected provider only needs chat_completion() and
+            # chat_completion_stream() methods matching LLMProvider's
+            # signatures. See calcifer.testing.MockProvider.
+            self._provider = provider
+        else:
+            self._provider = LLMProvider(
+                api_key=self._config.api_key,
+                base_url=self._config.base_url,
+                model=self._config.model,
+                max_tokens=self._config.max_tokens,
+                temperature=self._config.temperature,
+                extra_params=extra_params,
+            )
         self._context_mgr = ContextManager(
             max_context_tokens=self._config.max_context_tokens,
             compact_threshold=self._config.compact_threshold,

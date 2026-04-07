@@ -123,6 +123,27 @@ file an issue describing your use case.
 - **`run_tools`** — low-level helper that runs a list of tool calls.
   Most users use `Agent` instead.
 
+## Testing utilities (`calcifer.testing`)
+
+The `calcifer.testing` submodule is **public** but intentionally NOT
+re-exported from `calcifer.__all__`. Import it by its full path:
+
+```python
+from calcifer.testing import MockProvider, assert_tool_called, assert_message_count
+```
+
+Exports:
+- **`MockProvider`** — drop-in fake `LLMProvider` that returns canned
+  responses in order. Inject via `Agent(provider=...)`.
+- **`assert_tool_called`** — assertion helper that walks an
+  `AgentResult` looking for a specific tool invocation.
+- **`assert_message_count`** — assertion helper that counts messages
+  in an `AgentResult`, optionally filtered by role.
+
+See [`docs/testing.md`](testing.md) for examples. Stability: same as
+Provisional — the API may evolve in 0.x but breaking changes will be
+called out in CHANGELOG.
+
 ## Internal helpers
 
 Anything visible in `dir(calcifer)` but **not** in `calcifer.__all__`
