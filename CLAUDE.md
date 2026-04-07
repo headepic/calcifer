@@ -25,8 +25,7 @@ Claude Code 的 Agent Runner 核心机制，面向任意 OpenAI 兼容 API。
   ```
   .venv/bin/python -m pytest tests/ -q \
     --ignore=tests/test_e2e_real.py \
-    --ignore=tests/test_e2e_mcp_skill.py \
-    --ignore=tests/test_tui_web.py
+    --ignore=tests/test_e2e_mcp_skill.py
   ```
 
 ### 代码风格
