@@ -518,7 +518,11 @@
         "All 434 existing tests still pass"
       ],
       "verification": [
-        ".venv/bin/python -c \"import calcifer; assert False, 'not implemented'\"",
+        ".venv/bin/python -c \"from calcifer.testing import MockProvider, assert_tool_called, assert_message_count; from calcifer.testing import __all__; assert set(__all__) == {'MockProvider','assert_tool_called','assert_message_count'}, f'testing __all__ mismatch: {__all__}'\"",
+        ".venv/bin/python -c \"import inspect; from calcifer import Agent; sig = inspect.signature(Agent.__init__); assert 'provider' in sig.parameters, f'Agent.__init__ missing provider kwarg: {list(sig.parameters.keys())}'\"",
+        ".venv/bin/python -c \"import calcifer; assert len(calcifer.__all__) == 31, f'calcifer.__all__ drifted: {len(calcifer.__all__)} names'\"",
+        ".venv/bin/python -c \"from pathlib import Path; p=Path('docs/testing.md'); assert p.exists(), 'docs/testing.md missing'; t=p.read_text(); assert 'MockProvider' in t and 'assert_tool_called' in t, 'docs/testing.md missing core examples'\"",
+        ".venv/bin/python -m pytest tests/test_testing_module.py -q",
         ".venv/bin/python -m pytest tests/ -q --ignore=tests/test_e2e_real.py --ignore=tests/test_e2e_mcp_skill.py --ignore=tests/test_tui_web.py"
       ],
       "reference": "Anthropic SDK's test mode. No Claude Code analog.",
@@ -527,11 +531,11 @@
       "verified_sha": "",
       "verified_tree": "",
       "blocked_reason": "",
-      "review_status": "",
-      "review_notes": "",
-      "reviewed_at": "",
-      "reviewed_contract_sha": "",
-      "reviewer": ""
+      "review_status": "approved",
+      "review_notes": "Approved: injection seam verified additive (agent.py:98-149 unconditionally builds self._provider, provider=None kwarg is clean). chat_completion_stream confirmed async generator. ToolCall.arguments is str (JSON). Fixed two nits in-flight: test baseline 479→482, and added Testing utilities subsection to docs/public-api.md scope.",
+      "reviewed_at": "2026-04-06T13:57:37+00:00",
+      "reviewed_contract_sha": "cdbc43ac17f87112",
+      "reviewer": "subagent"
     },
     {
       "id": "sdk-split-tui-package",

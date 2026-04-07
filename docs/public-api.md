@@ -140,9 +140,8 @@ Exports:
 - **`assert_message_count`** — assertion helper that counts messages
   in an `AgentResult`, optionally filtered by role.
 
-See [`docs/testing.md`](testing.md) for examples. Stability: same as
-Provisional — the API may evolve in 0.x but breaking changes will be
-called out in CHANGELOG.
+See [`docs/testing.md`](testing.md) for examples. Stability:
+Provisional — the API may evolve in 0.x.
 
 ## Internal helpers
 
@@ -158,8 +157,3 @@ You can import from internal modules but Calcifer makes **no
 stability guarantee** about them. Names may move, signatures may
 change, behavior may shift.
 
-## Semver policy
-
-See [`docs/semver.md`](semver.md) for the canonical semver policy
-(version-bump triggers, deprecation rules, and the 3-step procedure
-for changing the public API).

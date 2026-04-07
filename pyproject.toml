@@ -39,7 +39,6 @@ dependencies = [
 Homepage = "https://github.com/headepic/calcifer"
 Repository = "https://github.com/headepic/calcifer"
 Issues = "https://github.com/headepic/calcifer/issues"
-Changelog = "https://github.com/headepic/calcifer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 tui = [
