@@ -4,6 +4,8 @@ Tests: agent loop, tool calling, streaming, cost tracking.
 """
 
 import asyncio
+import os
+
 from calcifer import Agent, CalciferConfig, tool
 
 
@@ -23,9 +25,9 @@ async def test_simple_text():
     """Test 1: Simple text response (no tools)."""
     print("\n=== Test 1: Simple text response ===")
     config = CalciferConfig(
-        api_key="quotio-local-D4D439C0-3E09-47C5-8ABC-9B33F364B680",
-        base_url="http://127.0.0.1:8317/v1",
-        model="gpt-5.4-mini",
+        api_key=os.environ["OPENAI_API_KEY"],
+        base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
         system_prompt="You are a helpful assistant. Be concise.",
     )
 
@@ -44,9 +46,9 @@ async def test_tool_calling():
     """Test 2: Tool calling loop."""
     print("\n=== Test 2: Tool calling ===")
     config = CalciferConfig(
-        api_key="quotio-local-D4D439C0-3E09-47C5-8ABC-9B33F364B680",
-        base_url="http://127.0.0.1:8317/v1",
-        model="gpt-5.4-mini",
+        api_key=os.environ["OPENAI_API_KEY"],
+        base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
         system_prompt="You are a calculator. Use the provided tools. Be concise.",
     )
 
@@ -70,9 +72,9 @@ async def test_multi_tool():
     """Test 3: Multiple tool calls in sequence."""
     print("\n=== Test 3: Multi-step tool calls ===")
     config = CalciferConfig(
-        api_key="quotio-local-D4D439C0-3E09-47C5-8ABC-9B33F364B680",
-        base_url="http://127.0.0.1:8317/v1",
-        model="gpt-5.4-mini",
+        api_key=os.environ["OPENAI_API_KEY"],
+        base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
         system_prompt="You are a calculator. Use tools for every calculation. Be concise.",
     )
 
@@ -95,9 +97,9 @@ async def test_streaming():
     """Test 4: Streaming with lifecycle events."""
     print("\n=== Test 4: Streaming + lifecycle events ===")
     config = CalciferConfig(
-        api_key="quotio-local-D4D439C0-3E09-47C5-8ABC-9B33F364B680",
-        base_url="http://127.0.0.1:8317/v1",
-        model="gpt-5.4-mini",
+        api_key=os.environ["OPENAI_API_KEY"],
+        base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
         system_prompt="You are a helpful assistant. Be concise.",
     )
 

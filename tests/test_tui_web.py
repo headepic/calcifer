@@ -9,6 +9,7 @@ Tests:
 
 import asyncio
 import json
+import os
 import sys
 from unittest.mock import AsyncMock, patch
 
@@ -29,9 +30,9 @@ from calcifer.tui.renderer import (
 from calcifer.tui.app import run_print_mode
 from calcifer.tui.theme import CALCIFER_THEME
 
-API_KEY = "quotio-local-D4D439C0-3E09-47C5-8ABC-9B33F364B680"
-BASE_URL = "http://127.0.0.1:8317/v1"
-MODEL = "gpt-5.4-mini"
+API_KEY = os.environ.get("OPENAI_API_KEY", "")
+BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
 
 def check_llm():

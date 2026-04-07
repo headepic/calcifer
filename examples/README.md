@@ -31,19 +31,10 @@ export OPENAI_MODEL=llama3
 python examples/01_hello.py
 ```
 
-接本地 quotio gateway（开发常用）：
-
-```bash
-export OPENAI_API_KEY=quotio-local-D4D439C0-3E09-47C5-8ABC-9B33F364B680
-export OPENAI_BASE_URL=http://localhost:8317/v1
-export OPENAI_MODEL=gpt-5.4-mini
-python examples/01_hello.py
-```
-
-> **注意**：quotio 这个 endpoint 在非流式模式下会返回 `content: null`。
-> calcifer 的 `LLMProvider` 已经内置 fallback：检测到这种空响应会自动
-> 切到流式模式（一次性 sticky flag），后续调用直接走流式路径。第一次
-> 调用会有一行 `WARNING`，之后就没有了。
+> **注意**：某些 OpenAI 兼容 endpoint 在非流式模式下会返回 `content: null`
+> （token 只通过 SSE 发出）。`LLMProvider` 内置 fallback：检测到这种空响应
+> 会自动切到流式模式（一次性 sticky flag），后续调用直接走流式路径。
+> 第一次调用会有一行 `WARNING`，之后就没有了。
 
 `04_testing.py` 不需要任何环境变量，直接运行即可：
 
