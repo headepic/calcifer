@@ -134,7 +134,7 @@ def test_index_html_contains_chat_surface():
     assert '<aside id="agent-loop-panel" class="agent-loop-panel" hidden>' in html
     assert 'id="agent-loop-events"' in html
     assert 'id="agent-loop-detail"' in html
-    assert 'Agent loop' in html
+    assert 'Run details' in html
     assert 'class="message-list"' in html
     assert '.message[data-role="user"] {' in html
     assert 'align-self: flex-end;' in html
@@ -146,35 +146,60 @@ def test_index_html_contains_chat_surface():
     assert 'assistantTrace.push(payload);' in html
     assert 'workspaceGrid.classList.add("has-trace");' in html
     assert 'workspaceGrid.classList.remove("has-trace");' in html
-    assert 'id="notes-toggle"' in html
-    assert 'id="raw-toggle"' in html
+    assert 'id="overview-tab"' in html
+    assert 'id="steps-tab"' in html
+    assert 'id="sources-tab"' in html
+    assert 'id="raw-tab"' in html
     assert 'id="stop-button"' in html
     assert 'fetch("/api/cancel"' in html
     assert 'function buildRunSummary(assistantView)' in html
-    assert 'function buildInspectorModel(assistantView)' in html
+    assert 'function buildRunDetailsModel(assistantView)' in html
+    assert 'function buildTraceCapsule(summary)' in html
+    assert 'function groupToolEventsByCall(children)' in html
+    assert 'function renderOverview(model)' in html
+    assert 'function renderSteps(model)' in html
+    assert 'function renderSources(model)' in html
+    assert 'function renderRaw(model)' in html
     assert 'function renderInspector(model)' in html
     assert 'function renderInspectorDetail(node)' in html
-    assert 'function insertTimelineChildAfterRelatedEvents(children, child, toolCallId)' in html
     assert 'function formatStructuredValue(value)' in html
-    assert 'className = "inspector-summary"' in html
-    assert 'className = "timeline-node"' in html
-    assert 'className = "timeline-child"' in html
-    assert 'className = "timeline-note"' in html
+    assert 'className = "trace-capsule"' in html
+    assert 'className = "run-summary-card"' in html
+    assert 'className = "trace-step"' in html
+    assert 'className = "tool-group-card"' in html
+    assert 'className = "source-card"' in html
+    assert '.message[data-role="assistant"].is-pending .message-content' in html
+    assert 'function setAssistantPlaceholder(assistantView, text)' in html
+    assert 'function clearAssistantPlaceholder(assistantView)' in html
+    assert 'function appendAssistantPathItem(assistantView, item)' in html
+    assert 'function updateAssistantPathFromTrace(assistantView, payload)' in html
+    assert 'setAssistantPlaceholder(assistantView, "Thinking...");' in html
+    assert 'setAssistantPlaceholder(assistantView, "Searching web...");' in html
+    assert 'appendAssistantPathItem(assistantView, {key: "input", label: "Understanding request"});' in html
+    assert 'assistantView.pathItems = new Map();' in html
+    assert 'className = "activity-path"' in html
+    assert 'Searching web: ${query}' in html
+    assert 'Found ${resultCount} results' in html
+    assert 'assistantView.preserveActivityPath = true;' in html
+    assert 'No response returned.' in html
     assert 'assistantView.node.addEventListener("click"' in html
     assert 'agentLoopDetail.hidden = true;' in html
     assert 'agentLoopDetail.hidden = false;' in html
     assert 'JSON.stringify(payload, null, 2)' in html
-    assert 'selectTimelineNode(node, element)' in html
+    assert 'selectTraceNode(node, element)' in html
     assert 'Model request' in html
     assert 'Final answer' in html
+    assert 'Web search' in html
+    assert 'Reasoning summary' in html
     assert 'Verbose' not in html
     assert 'className = "loop-event"' not in html
     assert 'selectLoopEvent(payload, item)' not in html
+    assert 'className = "timeline-child"' not in html
     assert 'Assistant delta' not in html
     assert 'if (payload.type === "assistant_delta") {' in html
     assert 'return;\n        }\n        assistantTrace.push(payload);' in html
     assert 'splice(callIndex + 1, 0, child)' not in html
-    assert 'relatedKinds.has(item.kind)' in html
+    assert 'function insertTimelineChildAfterRelatedEvents(children, child, toolCallId)' not in html
     assert 'className = "run-details"' not in html
     assert 'className = "run-summary"' not in html
     assert 'class="composer-card"' in html

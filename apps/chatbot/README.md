@@ -8,12 +8,12 @@ It keeps the application layer deliberately thin:
 - `select_tools()` exposes `none`, `readonly`, and `all` tool modes. Readonly
   mode includes local read/search tools plus built-in `web_search`.
 - A local standard-library web server renders the chat page.
-- Each assistant answer keeps its own run trace. Click the answer to open the
-  inspector for that specific run.
-- The inspector shows a chain-oriented agent loop timeline: input, model
-  requests, tool calls, tool results, and final/error status.
-- Notes and raw payloads can be toggled in the inspector when deeper trace
-  detail is needed.
+- Each assistant answer keeps its own run details. Click the answer or its
+  trace capsule to inspect that specific run.
+- The inspector has Overview, Steps, Sources, and Raw views. Overview explains
+  the run path, Steps groups model requests and tool activity into readable
+  actions, Sources lifts web search results into clickable cards, and Raw keeps
+  the full event payloads for debugging.
 - The Stop button aborts the browser request and asks the current agent run to
   stop gracefully.
 - Tests use `calcifer.testing.MockProvider`, so they run without a real LLM.

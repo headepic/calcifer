@@ -74,7 +74,7 @@ def render_index_html() -> str:
       grid-template-columns: minmax(0, 1fr);
     }
     .codex-workspace-grid.has-trace {
-      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-columns: minmax(0, 1fr) 420px;
     }
     .topbar {
       min-height: 54px;
@@ -170,7 +170,7 @@ def render_index_html() -> str:
     .agent-loop-panel {
       min-height: 0;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
       border-left: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.82);
     }
@@ -212,6 +212,31 @@ def render_index_html() -> str:
       gap: 5px;
       cursor: pointer;
     }
+    .trace-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(247, 247, 244, 0.74);
+    }
+    .trace-tab {
+      min-width: 0;
+      min-height: 30px;
+      padding: 5px 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted-strong);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .trace-tab.is-active {
+      border-color: var(--line-strong);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 0 rgba(31, 31, 29, 0.04);
+    }
     .agent-loop-events {
       min-height: 0;
       overflow-y: auto;
@@ -219,6 +244,143 @@ def render_index_html() -> str:
       display: flex;
       flex-direction: column;
       gap: 10px;
+    }
+    .run-summary-card,
+    .trace-step,
+    .tool-group-card,
+    .source-card,
+    .empty-state {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 8px;
+    }
+    .run-summary-card {
+      border-color: #b9d8d3;
+      background: var(--accent-soft);
+    }
+    .run-summary-title,
+    .trace-step-title,
+    .tool-group-title,
+    .source-card-title {
+      min-width: 0;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.3;
+      font-weight: 750;
+    }
+    .run-summary-meta,
+    .trace-step-meta,
+    .tool-group-meta,
+    .source-card-meta,
+    .empty-state {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .run-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .run-stat {
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 7px;
+    }
+    .run-stat-value {
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.2;
+      font-weight: 750;
+    }
+    .run-stat-label {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.3;
+    }
+    .trace-section-title {
+      margin-top: 4px;
+      color: var(--muted-strong);
+      font-size: 11px;
+      line-height: 1.3;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+    .run-path {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: var(--muted-strong);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .trace-step {
+      cursor: pointer;
+    }
+    .trace-step.is-selected,
+    .tool-group-card.is-selected,
+    .source-card.is-selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.12);
+    }
+    .trace-step-head,
+    .tool-group-head,
+    .source-card-head {
+      min-width: 0;
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .trace-step-preview,
+    .tool-group-preview,
+    .source-card-snippet {
+      color: var(--muted-strong);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .tool-group-card {
+      margin-left: 12px;
+      background: rgba(247, 247, 244, 0.72);
+    }
+    .tool-group-card[data-kind="tool_result_error"] {
+      border-color: #efb2ad;
+      background: #fff6f5;
+    }
+    .source-card {
+      cursor: pointer;
+    }
+    .source-card a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .source-card a:hover {
+      text-decoration: underline;
+    }
+    .raw-payload {
+      margin: 0;
+      min-height: 0;
+      overflow: auto;
+      padding: 10px 12px;
+      color: var(--muted-strong);
+      background: var(--surface-code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.5;
     }
     .inspector-summary {
       display: grid;
@@ -401,6 +563,10 @@ def render_index_html() -> str:
     .message[data-role="assistant"].has-detail .message-content:hover {
       color: #0f625d;
     }
+    .message[data-role="assistant"].is-pending .message-content {
+      color: var(--muted);
+      font-style: italic;
+    }
     .message[data-role="error"] {
       align-self: flex-start;
       width: min(82%, 760px);
@@ -430,6 +596,52 @@ def render_index_html() -> str:
       overflow-wrap: anywhere;
       font-size: 15px;
     }
+    .message-extras {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 4px;
+    }
+    .trace-capsule {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.74);
+      color: var(--muted-strong);
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .trace-capsule:hover {
+      border-color: var(--line-strong);
+      color: var(--ink);
+    }
+    .trace-capsule-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .activity-path {
+      width: 100%;
+      margin: 0;
+      padding: 2px 0 0 18px;
+      display: grid;
+      gap: 4px;
+      color: var(--muted-strong);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+    .activity-path-item {
+      min-width: 0;
+      padding-left: 2px;
+      overflow-wrap: anywhere;
+    }
     .message[data-role="user"] .message-content {
       padding: 10px 13px;
       border: 1px solid var(--line);
@@ -449,7 +661,7 @@ def render_index_html() -> str:
     }
     .composer-zone {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-columns: minmax(0, 1fr) 420px;
       border-top: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.96);
       padding: 12px 0 18px;
@@ -590,13 +802,17 @@ def render_index_html() -> str:
         </div>
         <aside id="agent-loop-panel" class="agent-loop-panel" hidden>
           <div class="agent-loop-head">
-            <div class="agent-loop-title">Agent loop</div>
+            <div class="agent-loop-title">Run details</div>
             <div class="agent-loop-status">
               <span id="loop-status">Idle</span>
-              <label class="agent-loop-toggle"><input id="notes-toggle" type="checkbox">Notes</label>
-              <label class="agent-loop-toggle"><input id="raw-toggle" type="checkbox">Raw</label>
               <button id="close-trace-button" class="ghost-button" type="button">Close</button>
             </div>
+          </div>
+          <div class="trace-tabs" role="tablist" aria-label="Run detail views">
+            <button id="overview-tab" class="trace-tab is-active" type="button" data-trace-tab="overview">Overview</button>
+            <button id="steps-tab" class="trace-tab" type="button" data-trace-tab="steps">Steps</button>
+            <button id="sources-tab" class="trace-tab" type="button" data-trace-tab="sources">Sources</button>
+            <button id="raw-tab" class="trace-tab" type="button" data-trace-tab="raw">Raw</button>
           </div>
           <section id="agent-loop-events" class="agent-loop-events" aria-live="polite"></section>
           <section id="agent-loop-detail" class="loop-detail" hidden>
@@ -630,14 +846,14 @@ def render_index_html() -> str:
     const sendButton = document.getElementById("send-button");
     const resetButton = document.getElementById("reset-button");
     const closeTraceButton = document.getElementById("close-trace-button");
-    const notesToggle = document.getElementById("notes-toggle");
-    const rawToggle = document.getElementById("raw-toggle");
     const stopButton = document.getElementById("stop-button");
     const turnCount = document.getElementById("turn-count");
     const tokenCount = document.getElementById("token-count");
+    const traceTabs = Array.from(document.querySelectorAll("[data-trace-tab]"));
     let currentAbortController = null;
     let activeAssistantView = null;
     let selectedInspectorNode = null;
+    let activeTraceTab = "overview";
 
     function scrollToBottom() {
       threadWrap.scrollTop = threadWrap.scrollHeight;
@@ -664,11 +880,96 @@ def render_index_html() -> str:
       content.className = "message-content";
       content.textContent = text;
 
+      const extras = document.createElement("div");
+      extras.className = "message-extras";
+
       node.append(meta);
       node.append(content);
+      node.append(extras);
       messages.appendChild(node);
       scrollToBottom();
-      return {node, content};
+      return {node, content, extras};
+    }
+
+    function setAssistantPlaceholder(assistantView, text) {
+      if (!assistantView || assistantView.textStarted) return;
+      assistantView.node.classList.add("is-pending");
+      assistantView.content.textContent = text;
+      scrollToBottom();
+    }
+
+    function clearAssistantPlaceholder(assistantView) {
+      if (!assistantView) return;
+      assistantView.node.classList.remove("is-pending");
+    }
+
+    function ensureAssistantPath(assistantView) {
+      if (!assistantView.activityPath || !assistantView.activityPath.isConnected) {
+        const path = document.createElement("ol");
+        path.className = "activity-path";
+        assistantView.activityPath = path;
+        assistantView.extras.prepend(path);
+      }
+      return assistantView.activityPath;
+    }
+
+    function appendAssistantPathItem(assistantView, item) {
+      if (!assistantView || !item || !item.label) return;
+      if (!assistantView.pathItems) assistantView.pathItems = new Map();
+      const key = item.key || item.label;
+      let node = assistantView.pathItems.get(key);
+      if (!node) {
+        node = document.createElement("li");
+        node.className = "activity-path-item";
+        assistantView.pathItems.set(key, node);
+        ensureAssistantPath(assistantView).appendChild(node);
+      }
+      node.textContent = item.label;
+    }
+
+    function toolQueryFromPayload(payload) {
+      const args = parseMaybeJson(payload.arguments || payload.detail || {});
+      if (args && typeof args === "object" && args.query) return args.query;
+      if (payload.progress && payload.progress.query) return payload.progress.query;
+      return "";
+    }
+
+    function updateAssistantPathFromTrace(assistantView, payload) {
+      if (!payload || payload.type !== "trace") return;
+      if (payload.stage === "model_note") {
+        appendAssistantPathItem(assistantView, {key: "thinking", label: "Thinking through request"});
+        return;
+      }
+      if (payload.stage === "tool_call") {
+        const query = toolQueryFromPayload(payload);
+        if (payload.tool_name === "web_search" && query) {
+          appendAssistantPathItem(assistantView, {key: `search-${payload.tool_call_id || query}`, label: `Searching web: ${query}`});
+        } else {
+          appendAssistantPathItem(assistantView, {key: `tool-${payload.tool_call_id || payload.tool_name || "unknown"}`, label: `Using ${payload.tool_name || "tool"}`});
+        }
+        return;
+      }
+      if (payload.stage === "tool_progress" && payload.progress_type === "query_update") {
+        const query = toolQueryFromPayload(payload);
+        if (query) appendAssistantPathItem(assistantView, {key: `search-${payload.tool_call_id || query}`, label: `Searching web: ${query}`});
+        return;
+      }
+      if (payload.stage === "tool_progress" && payload.progress_type === "search_results_received") {
+        const query = toolQueryFromPayload(payload);
+        const resultCount = payload.progress?.result_count ?? 0;
+        appendAssistantPathItem(assistantView, {
+          key: `results-${payload.tool_call_id || query}`,
+          label: query ? `Found ${resultCount} results for ${query}` : `Found ${resultCount} results`,
+        });
+        return;
+      }
+      if (payload.stage === "tool_result") {
+        appendAssistantPathItem(assistantView, {key: `result-${payload.tool_call_id || "tool"}`, label: payload.is_error ? "Tool result failed" : "Reading tool result"});
+        return;
+      }
+      if (payload.stage === "llm_finish") {
+        appendAssistantPathItem(assistantView, {key: `finish-${payload.turn_id || "model"}`, label: payload.detail ? `Model finished: ${payload.detail}` : "Model finished"});
+      }
     }
 
     function formatStructuredValue(value) {
@@ -694,31 +995,56 @@ def render_index_html() -> str:
       return parts.filter(Boolean).join(" · ");
     }
 
-    function insertTimelineChildAfterRelatedEvents(children, child, toolCallId) {
-      if (!toolCallId) {
-        children.push(child);
-        return;
+    function compactModelNotes(notes) {
+      return (notes || []).join("").replace(/\\s+/g, " ").trim();
+    }
+
+    function parseMaybeJson(value) {
+      if (typeof value !== "string") return value;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
       }
-      const sameTool = (item) => {
-        const detailId = item?.detail?.tool_call_id;
-        const rawId = item?.raw?.tool_call_id;
-        return detailId === toolCallId || rawId === toolCallId;
+    }
+
+    function normalizedResultPayload(value) {
+      const parsed = parseMaybeJson(value);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    }
+
+    function resultCountFromPayload(value) {
+      const payload = normalizedResultPayload(value);
+      if (typeof payload.result_count === "number") return payload.result_count;
+      if (Array.isArray(payload.results)) return payload.results.length;
+      return 0;
+    }
+
+    function hostLabel(url) {
+      try {
+        return new URL(url).hostname.replace(/^www\\./, "");
+      } catch {
+        return "";
+      }
+    }
+
+    function sourceFromResult(item, query, callId) {
+      return {
+        id: `${callId || "source"}-${String(item.url || item.title || "").slice(0, 48)}`,
+        title: item.title || item.url || "Untitled source",
+        url: item.url || "",
+        host: hostLabel(item.url || ""),
+        snippet: item.snippet || "",
+        query,
+        tool_call_id: callId || "",
+        detail: item,
       };
-      const resultKinds = new Set(["tool_result", "tool_result_error"]);
-      if (child.kind === "tool_progress") {
-        const resultIndex = children.findIndex((item) => sameTool(item) && resultKinds.has(item.kind));
-        if (resultIndex >= 0) {
-          children.splice(resultIndex, 0, child);
-          return;
-        }
-      }
-      const relatedKinds = new Set(["tool_call", "tool_progress"]);
-      let insertIndex = -1;
-      children.forEach((item, index) => {
-        if (sameTool(item) && relatedKinds.has(item.kind)) insertIndex = index;
-      });
-      if (insertIndex >= 0) children.splice(insertIndex + 1, 0, child);
-      else children.push(child);
+    }
+
+    function extractSourcesFromResult(value, query, callId) {
+      const payload = normalizedResultPayload(value);
+      if (!Array.isArray(payload.results)) return [];
+      return payload.results.map((item) => sourceFromResult(item, payload.query || query || "", callId));
     }
 
     function renderInspectorDetail(node) {
@@ -727,8 +1053,14 @@ def render_index_html() -> str:
       agentLoopDetail.hidden = false;
       agentLoopDetail.className = "loop-detail";
       loopDetailTitle.textContent = node.title || "Payload";
-      const payload = rawToggle.checked ? (node.raw || node.payload || node.detail || node) : (node.detail || node.payload || node);
+      const payload = node.raw || node.payload || node.detail || node;
       loopDetailPayload.textContent = JSON.stringify(payload, null, 2);
+    }
+
+    function updateTraceTabs() {
+      traceTabs.forEach((tab) => {
+        tab.classList.toggle("is-active", tab.dataset.traceTab === activeTraceTab);
+      });
     }
 
     function hideAssistantTrace() {
@@ -739,6 +1071,8 @@ def render_index_html() -> str:
       loopDetailTitle.textContent = "Payload";
       loopDetailPayload.textContent = "{}";
       loopStatus.textContent = "Idle";
+      activeTraceTab = "overview";
+      updateTraceTabs();
       activeAssistantView = null;
       selectedInspectorNode = null;
     }
@@ -767,11 +1101,103 @@ def render_index_html() -> str:
       };
     }
 
-    function buildInspectorModel(assistantView) {
+    function buildTraceCapsule(summary) {
+      const toolCalls = summary.tool_calls || [];
+      const toolResults = summary.tool_results || [];
+      const webSearches = toolCalls.filter((call) => call.tool_name === "web_search").length;
+      const resultCount = toolResults.reduce((total, result) => total + resultCountFromPayload(result.result), 0);
+      const toolLabel = webSearches
+        ? `Searched web · ${webSearches} ${webSearches === 1 ? "query" : "queries"}`
+        : toolCalls.length
+          ? `${toolCalls.length} ${toolCalls.length === 1 ? "tool call" : "tool calls"}`
+          : "Reasoning summary";
+      return compactMeta([
+        toolLabel,
+        resultCount ? `${resultCount} results` : "",
+        `${summary.turns || 0} ${summary.turns === 1 ? "model turn" : "model turns"}`,
+        `${summary.usage.total_tokens || 0} tokens`,
+      ]);
+    }
+
+    function groupToolEventsByCall(children) {
+      const groups = [];
+      const byId = new Map();
+      const ensureGroup = (toolCallId) => {
+        const id = toolCallId || `tool-${groups.length}`;
+        if (!byId.has(id)) {
+          const group = {
+            id: `tool-group-${id}`,
+            kind: "tool_group",
+            title: "Tool",
+            meta: shortId(id),
+            tool_call_id: toolCallId || "",
+            tool_name: "",
+            call: null,
+            progress: [],
+            result: null,
+            resultPayload: {},
+            resultCount: 0,
+            sources: [],
+            detail: {},
+            raw: {},
+          };
+          byId.set(id, group);
+          groups.push(group);
+        }
+        return byId.get(id);
+      };
+
+      for (const child of children) {
+        const toolCallId = child.detail?.tool_call_id || child.raw?.tool_call_id || "";
+        const group = ensureGroup(toolCallId);
+        if (child.kind === "tool_call") {
+          group.call = child;
+          group.tool_name = child.detail.tool_name || "";
+        } else if (child.kind === "tool_progress") {
+          group.progress.push(child);
+        } else if (child.kind === "tool_result" || child.kind === "tool_result_error") {
+          group.result = child;
+          group.kind = child.kind === "tool_result_error" ? "tool_result_error" : "tool_group";
+          group.resultPayload = normalizedResultPayload(child.detail.result);
+          group.resultCount = resultCountFromPayload(child.detail.result);
+        }
+      }
+
+      for (const group of groups) {
+        const args = group.call?.detail?.arguments || {};
+        const query = args.query || group.resultPayload.query || group.progress.find((item) => item.detail?.progress?.query)?.detail.progress.query || "";
+        group.tool_name = group.tool_name || group.call?.detail?.tool_name || "unknown";
+        group.title = group.tool_name === "web_search" ? "Web search" : `Tool: ${group.tool_name}`;
+        group.meta = compactMeta([
+          shortId(group.tool_call_id),
+          group.result?.detail?.is_error ? "failed" : group.result ? "success" : "running",
+          group.resultCount ? `${group.resultCount} results` : "",
+        ]);
+        group.preview = query
+          ? `Query: ${query}`
+          : previewValue(args || group.resultPayload || group.progress.map((item) => item.detail), 180);
+        group.sources = extractSourcesFromResult(group.result?.detail?.result, query, group.tool_call_id);
+        group.detail = {
+          tool_name: group.tool_name,
+          tool_call_id: group.tool_call_id,
+          arguments: args,
+          progress: group.progress.map((item) => item.detail),
+          result: group.resultPayload,
+        };
+        group.raw = {
+          call: group.call?.raw || null,
+          progress: group.progress.map((item) => item.raw),
+          result: group.result?.raw || null,
+        };
+      }
+      return groups;
+    }
+
+    function buildRunDetailsModel(assistantView) {
       const summary = buildRunSummary(assistantView);
       const trace = (assistantView.trace || []).filter((payload) => payload && payload.type !== "assistant_delta");
       const turns = new Map();
-      const nodes = [];
+      const turnNodes = [];
       const tools = new Map();
       let finalNode = null;
       let terminalNode = null;
@@ -794,13 +1220,13 @@ def render_index_html() -> str:
             detail: {turn_id: resolved, finish_reason: "", usage: null, notes: []},
           };
           turns.set(resolved, node);
-          nodes.push(node);
+          turnNodes.push(node);
         }
         return turns.get(resolved);
       }
 
       const inputPayload = trace.find((payload) => payload.type === "input");
-      nodes.push({
+      const inputNode = {
         id: "input",
         kind: "input",
         title: "User input",
@@ -808,7 +1234,7 @@ def render_index_html() -> str:
         preview: previewValue(inputPayload?.detail || summary.input),
         detail: {run_id: summary.run_id, input: inputPayload?.detail || summary.input},
         raw: inputPayload || {type: "input", detail: summary.input},
-      });
+      };
 
       for (const payload of trace) {
         if (payload.type === "input" || payload.type === "run_start") continue;
@@ -918,11 +1344,7 @@ def render_index_html() -> str:
             },
             raw: payload,
           };
-          insertTimelineChildAfterRelatedEvents(
-            progressTurn.children,
-            child,
-            payload.tool_call_id,
-          );
+          progressTurn.children.push(child);
           continue;
         }
         if (payload.stage === "tool_result") {
@@ -941,134 +1363,321 @@ def render_index_html() -> str:
             },
             raw: payload,
           };
-          insertTimelineChildAfterRelatedEvents(
-            resultTurn.children,
-            child,
-            payload.tool_call_id,
-          );
+          resultTurn.children.push(child);
         }
       }
 
       for (const turn of turns.values()) {
         const usage = turn.usage;
+        turn.toolGroups = groupToolEventsByCall(turn.children);
         turn.meta = compactMeta([
           `turn ${turn.turn_id}`,
           turn.finish_reason ? `finish ${turn.finish_reason}` : "",
           usage ? `${usage.total_tokens} tokens` : "",
-          turn.children.length ? `${turn.children.length} events` : "",
+          turn.toolGroups.length ? `${turn.toolGroups.length} tool ${turn.toolGroups.length === 1 ? "call" : "calls"}` : "",
         ]);
         turn.preview = compactMeta([
           turn.notes.length ? `${turn.notes.length} model notes` : "",
-          turn.children.length ? `${turn.children.length} tool events` : "model response",
+          turn.toolGroups.length ? `${turn.toolGroups.length} grouped tool events` : "model response",
         ]);
         turn.detail = {
           turn_id: turn.turn_id,
           finish_reason: turn.finish_reason,
           usage,
           notes: turn.notes,
+          tools: turn.toolGroups.map((group) => group.detail),
         };
       }
 
-      if (terminalNode) nodes.push(terminalNode);
-      if (finalNode) nodes.push(finalNode);
-      const selected = terminalNode || finalNode || nodes[nodes.length - 1] || null;
+      const toolGroups = turnNodes.flatMap((turn) => turn.toolGroups || []);
+      const seenSources = new Set();
+      const sources = [];
+      for (const source of toolGroups.flatMap((group) => group.sources || [])) {
+        const key = `${source.url}|${source.title}`;
+        if (!key || seenSources.has(key)) continue;
+        seenSources.add(key);
+        sources.push(source);
+      }
+      const webSearchCount = toolGroups.filter((group) => group.tool_name === "web_search").length;
+      const resultCount = toolGroups.reduce((total, group) => total + (group.resultCount || 0), 0);
       const statusLabel = terminalNode ? terminalNode.title : finalNode ? "Complete" : "Trace";
-      return {summary, nodes, selected, statusLabel};
+      const pathItems = [
+        inputNode.preview ? "Understood user request" : "",
+        ...toolGroups
+          .filter((group) => group.tool_name === "web_search")
+          .map((group) => group.preview.replace(/^Query: /, "Searched web for ")),
+        finalNode ? "Generated final answer" : "",
+        terminalNode ? terminalNode.title : "",
+      ].filter(Boolean);
+      return {
+        summary,
+        trace,
+        inputNode,
+        turns: turnNodes,
+        toolGroups,
+        sources,
+        finalNode,
+        terminalNode,
+        statusLabel,
+        pathItems,
+        stats: {
+          modelTurns: turnNodes.length,
+          toolCalls: toolGroups.length,
+          webSearches: webSearchCount,
+          resultCount,
+          tokens: summary.usage.total_tokens || 0,
+        },
+      };
     }
 
-    function selectTimelineNode(node, element) {
-      agentLoopEvents.querySelectorAll(".timeline-node, .timeline-child, .timeline-note").forEach((event) => {
+    function selectTraceNode(node, element) {
+      agentLoopEvents.querySelectorAll(".trace-step, .tool-group-card, .source-card").forEach((event) => {
         event.classList.remove("is-selected");
       });
       if (element) element.classList.add("is-selected");
       renderInspectorDetail(node);
     }
 
-    function appendInspectorSummary(model) {
-      const summary = model.summary;
-      const node = document.createElement("div");
-      node.className = "inspector-summary";
-      const title = document.createElement("div");
-      title.className = "inspector-summary-title";
-      title.textContent = `${summary.run_id || "run"} · ${model.statusLabel}`;
-      const meta = document.createElement("div");
-      meta.className = "inspector-summary-meta";
-      meta.textContent = compactMeta([
-        `${summary.turns || 0} turns`,
-        `${summary.usage.total_tokens || 0} tokens`,
-        summary.finish_reason ? `finish ${summary.finish_reason}` : "",
-      ]);
-      node.append(title, meta);
-      agentLoopEvents.appendChild(node);
-    }
-
-    function appendTimelineItem(container, node, options = {}) {
+    function appendTraceStep(container, node) {
       const item = document.createElement("div");
-      if (node.kind === "note") item.className = "timeline-note";
-      else if (options.child) item.className = "timeline-child";
-      else item.className = "timeline-node";
-      item.setAttribute("data-kind", node.kind);
-      item.setAttribute("data-node-id", node.id);
+      item.className = "trace-step";
       item.setAttribute("role", "button");
       item.setAttribute("tabindex", "0");
       const head = document.createElement("div");
-      head.className = "timeline-node-head";
+      head.className = "trace-step-head";
       const title = document.createElement("div");
-      title.className = "timeline-node-title";
+      title.className = "trace-step-title";
       title.textContent = node.title;
       const meta = document.createElement("div");
-      meta.className = "timeline-node-meta";
+      meta.className = "trace-step-meta";
       meta.textContent = node.meta || "";
       head.append(title, meta);
       item.append(head);
       if (node.preview) {
         const preview = document.createElement("div");
-        preview.className = "timeline-node-preview";
+        preview.className = "trace-step-preview";
         preview.textContent = node.preview;
         item.append(preview);
       }
-      item.addEventListener("click", () => selectTimelineNode(node, item));
+      item.addEventListener("click", () => selectTraceNode(node, item));
       item.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          selectTimelineNode(node, item);
+          selectTraceNode(node, item);
         }
       });
       container.appendChild(item);
       return item;
     }
 
-    function renderInspector(model) {
-      agentLoopEvents.innerHTML = "";
-      appendInspectorSummary(model);
-      const timeline = document.createElement("div");
-      timeline.className = "loop-timeline";
-      for (const node of model.nodes) {
-        appendTimelineItem(timeline, node);
-        if (node.kind === "model" && notesToggle.checked) {
-          node.notes.forEach((note, index) => {
-            appendTimelineItem(timeline, {
-              id: `${node.id}-note-${index}`,
-              kind: "note",
-              title: "Model note",
-              meta: `turn ${node.turn_id}`,
-              preview: previewValue(note, 180),
-              detail: {turn_id: node.turn_id, note},
-              raw: node.raw_events.find((event) => event.stage === "model_note") || node,
-            }, {child: true});
+    function appendToolGroup(container, group) {
+      const item = document.createElement("div");
+      item.className = "tool-group-card";
+      item.dataset.kind = group.kind;
+      item.setAttribute("role", "button");
+      item.setAttribute("tabindex", "0");
+      const head = document.createElement("div");
+      head.className = "tool-group-head";
+      const title = document.createElement("div");
+      title.className = "tool-group-title";
+      title.textContent = group.title;
+      const meta = document.createElement("div");
+      meta.className = "tool-group-meta";
+      meta.textContent = group.meta || "";
+      head.append(title, meta);
+      item.append(head);
+      if (group.preview) {
+        const preview = document.createElement("div");
+        preview.className = "tool-group-preview";
+        preview.textContent = group.preview;
+        item.append(preview);
+      }
+      item.addEventListener("click", () => selectTraceNode(group, item));
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectTraceNode(group, item);
+        }
+      });
+      container.appendChild(item);
+      return item;
+    }
+
+    function appendSourceCard(container, source) {
+      const item = document.createElement("div");
+      item.className = "source-card";
+      item.setAttribute("role", "button");
+      item.setAttribute("tabindex", "0");
+      const head = document.createElement("div");
+      head.className = "source-card-head";
+      const title = document.createElement("a");
+      title.className = "source-card-title";
+      title.href = source.url || "#";
+      title.target = "_blank";
+      title.rel = "noreferrer";
+      title.textContent = source.title;
+      const meta = document.createElement("div");
+      meta.className = "source-card-meta";
+      meta.textContent = compactMeta([source.host, source.query ? `query: ${source.query}` : ""]);
+      head.append(title, meta);
+      item.append(head);
+      if (source.snippet) {
+        const snippet = document.createElement("div");
+        snippet.className = "source-card-snippet";
+        snippet.textContent = source.snippet;
+        item.append(snippet);
+      }
+      item.addEventListener("click", (event) => {
+        if (event.target.tagName !== "A") selectTraceNode(source, item);
+      });
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectTraceNode(source, item);
+        }
+      });
+      container.appendChild(item);
+      return item;
+    }
+
+    function appendEmptyState(message) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = message;
+      agentLoopEvents.appendChild(empty);
+    }
+
+    function renderOverview(model) {
+      agentLoopDetail.hidden = true;
+      const card = document.createElement("div");
+      card.className = "run-summary-card";
+      const title = document.createElement("div");
+      title.className = "run-summary-title";
+      title.textContent = `${model.summary.run_id || "run"} · ${model.statusLabel}`;
+      const meta = document.createElement("div");
+      meta.className = "run-summary-meta";
+      meta.textContent = compactMeta([
+        `${model.stats.modelTurns} model ${model.stats.modelTurns === 1 ? "turn" : "turns"}`,
+        model.stats.webSearches ? `${model.stats.webSearches} web ${model.stats.webSearches === 1 ? "search" : "searches"}` : "",
+        model.stats.resultCount ? `${model.stats.resultCount} results` : "",
+        model.summary.finish_reason ? `finish ${model.summary.finish_reason}` : "",
+      ]);
+      const stats = document.createElement("div");
+      stats.className = "run-stat-grid";
+      [
+        ["Turns", model.stats.modelTurns],
+        ["Tools", model.stats.toolCalls],
+        ["Sources", model.sources.length],
+        ["Tokens", model.stats.tokens],
+      ].forEach(([label, value]) => {
+        const stat = document.createElement("div");
+        stat.className = "run-stat";
+        const statValue = document.createElement("div");
+        statValue.className = "run-stat-value";
+        statValue.textContent = String(value || 0);
+        const statLabel = document.createElement("div");
+        statLabel.className = "run-stat-label";
+        statLabel.textContent = label;
+        stat.append(statValue, statLabel);
+        stats.appendChild(stat);
+      });
+      card.append(title, meta, stats);
+      agentLoopEvents.appendChild(card);
+
+      const pathTitle = document.createElement("div");
+      pathTitle.className = "trace-section-title";
+      pathTitle.textContent = "Path";
+      agentLoopEvents.appendChild(pathTitle);
+      const path = document.createElement("ol");
+      path.className = "run-path";
+      for (const itemText of model.pathItems) {
+        const item = document.createElement("li");
+        item.textContent = itemText;
+        path.appendChild(item);
+      }
+      agentLoopEvents.appendChild(path);
+
+      if (model.sources.length) {
+        const sourcesTitle = document.createElement("div");
+        sourcesTitle.className = "trace-section-title";
+        sourcesTitle.textContent = "Sources";
+        agentLoopEvents.appendChild(sourcesTitle);
+        model.sources.slice(0, 3).forEach((source) => appendSourceCard(agentLoopEvents, source));
+      }
+    }
+
+    function renderSteps(model) {
+      agentLoopDetail.hidden = true;
+      appendTraceStep(agentLoopEvents, model.inputNode);
+      for (const turn of model.turns) {
+        appendTraceStep(agentLoopEvents, turn);
+        if (turn.notes.length) {
+          appendToolGroup(agentLoopEvents, {
+            id: `${turn.id}-notes`,
+            kind: "model_note",
+            title: "Reasoning summary",
+            meta: `${turn.notes.length} model notes`,
+            preview: previewValue(compactModelNotes(turn.notes), 220),
+            detail: {turn_id: turn.turn_id, notes: turn.notes},
+            raw: turn.raw_events.filter((event) => event.stage === "model_note"),
           });
         }
-        for (const child of node.children || []) {
-          appendTimelineItem(timeline, child, {child: true});
+        for (const group of turn.toolGroups || []) {
+          appendToolGroup(agentLoopEvents, group);
         }
       }
-      agentLoopEvents.appendChild(timeline);
-      if (model.selected) {
-        const selectedElement = agentLoopEvents.querySelector(`[data-node-id="${model.selected.id}"]`);
-        selectTimelineNode(model.selected, selectedElement);
-      } else {
-        agentLoopDetail.hidden = true;
+      if (model.terminalNode) appendTraceStep(agentLoopEvents, model.terminalNode);
+      if (model.finalNode) appendTraceStep(agentLoopEvents, model.finalNode);
+    }
+
+    function renderSources(model) {
+      agentLoopDetail.hidden = true;
+      if (!model.sources.length) {
+        appendEmptyState("No web sources were returned for this run.");
+        return;
       }
+      model.sources.forEach((source) => appendSourceCard(agentLoopEvents, source));
+    }
+
+    function renderRaw(model) {
+      agentLoopDetail.hidden = true;
+      const raw = document.createElement("pre");
+      raw.className = "raw-payload";
+      raw.textContent = JSON.stringify({summary: model.summary, trace: model.trace}, null, 2);
+      agentLoopEvents.appendChild(raw);
+    }
+
+    function renderInspector(model) {
+      agentLoopEvents.innerHTML = "";
+      updateTraceTabs();
+      if (activeTraceTab === "steps") renderSteps(model);
+      else if (activeTraceTab === "sources") renderSources(model);
+      else if (activeTraceTab === "raw") renderRaw(model);
+      else renderOverview(model);
+    }
+
+    function renderTraceCapsule(assistantView, model) {
+      if (!assistantView.preserveActivityPath) {
+        assistantView.extras.innerHTML = "";
+        assistantView.activityPath = null;
+        assistantView.pathItems = new Map();
+      } else if (assistantView.traceCapsule) {
+        assistantView.traceCapsule.remove();
+      }
+      const capsule = document.createElement("button");
+      capsule.className = "trace-capsule";
+      capsule.type = "button";
+      const dot = document.createElement("span");
+      dot.className = "trace-capsule-dot";
+      const label = document.createElement("span");
+      label.textContent = buildTraceCapsule(model.summary);
+      capsule.append(dot, label);
+      capsule.addEventListener("click", (event) => {
+        event.stopPropagation();
+        renderAssistantTrace(assistantView);
+      });
+      assistantView.traceCapsule = capsule;
+      assistantView.extras.appendChild(capsule);
     }
 
     function renderAssistantTrace(assistantView) {
@@ -1076,13 +1685,15 @@ def render_index_html() -> str:
       workspaceGrid.classList.add("has-trace");
       agentLoopPanel.hidden = false;
       agentLoopDetail.hidden = true;
-      const model = buildInspectorModel(assistantView);
+      const model = buildRunDetailsModel(assistantView);
       loopStatus.textContent = model.statusLabel;
       renderInspector(model);
     }
 
     function bindAssistantDetail(assistantView, payload) {
       assistantView.completePayload = payload;
+      const model = buildRunDetailsModel(assistantView);
+      renderTraceCapsule(assistantView, model);
       assistantView.node.classList.add("has-detail");
       assistantView.node.setAttribute("role", "button");
       assistantView.node.setAttribute("tabindex", "0");
@@ -1110,6 +1721,11 @@ def render_index_html() -> str:
       const assistantView = appendMessage("assistant", "");
       const assistantTrace = [{type: "input", label: "User input", detail: text}];
       assistantView.trace = assistantTrace;
+      assistantView.textStarted = false;
+      assistantView.preserveActivityPath = false;
+      assistantView.pathItems = new Map();
+      setAssistantPlaceholder(assistantView, "Thinking...");
+      appendAssistantPathItem(assistantView, {key: "input", label: "Understanding request"});
       let assistantText = "";
       currentAbortController = new AbortController();
       sendButton.disabled = true;
@@ -1120,12 +1736,25 @@ def render_index_html() -> str:
       function handlePayload(payload) {
         if (payload.type === "assistant_delta") {
           assistantText += payload.text || "";
+          assistantView.textStarted = true;
+          clearAssistantPlaceholder(assistantView);
           assistantView.content.textContent = assistantText;
           scrollToBottom();
           return;
         }
         assistantTrace.push(payload);
         if (payload.type === "trace") {
+          updateAssistantPathFromTrace(assistantView, payload);
+          if (payload.stage === "tool_call") {
+            const placeholder = payload.tool_name === "web_search" ? "Searching web..." : `Using ${payload.tool_name || "tool"}...`;
+            setAssistantPlaceholder(assistantView, placeholder);
+          } else if (payload.stage === "tool_progress" && payload.progress_type === "query_update") {
+            setAssistantPlaceholder(assistantView, "Searching web...");
+          } else if (payload.stage === "tool_result") {
+            setAssistantPlaceholder(assistantView, "Reading tool result...");
+          } else if (payload.stage === "model_note") {
+            setAssistantPlaceholder(assistantView, "Thinking...");
+          }
           return;
         }
         if (payload.type === "usage") {
@@ -1135,7 +1764,14 @@ def render_index_html() -> str:
         if (payload.type === "complete") {
           if (!assistantText && payload.reply) {
             assistantText = payload.reply;
+            assistantView.textStarted = true;
+            clearAssistantPlaceholder(assistantView);
             assistantView.content.textContent = assistantText;
+          } else if (!assistantText) {
+            assistantView.textStarted = true;
+            assistantView.preserveActivityPath = true;
+            clearAssistantPlaceholder(assistantView);
+            assistantView.content.textContent = "No response returned.";
           }
           turnCount.textContent = payload.turns ?? turnCount.textContent;
           tokenCount.textContent = payload.tokens ?? tokenCount.textContent;
@@ -1182,11 +1818,19 @@ def render_index_html() -> str:
             message: "Run stopped by user"
           };
           assistantTrace.push(stopPayload);
+          assistantView.textStarted = true;
+          assistantView.preserveActivityPath = true;
+          clearAssistantPlaceholder(assistantView);
+          assistantView.content.textContent = "Run stopped by user.";
           bindAssistantDetail(assistantView, stopPayload);
           status.textContent = "Stopped";
           loopStatus.textContent = "Stopped";
           return;
         }
+        assistantView.textStarted = true;
+        assistantView.preserveActivityPath = true;
+        clearAssistantPlaceholder(assistantView);
+        assistantView.content.textContent = "No response returned.";
         appendMessage("error", error.message);
         status.textContent = "Error";
         loopStatus.textContent = "Error";
@@ -1231,12 +1875,12 @@ def render_index_html() -> str:
       await fetch("/api/cancel", {method: "POST"});
     });
 
-    notesToggle.addEventListener("change", () => {
-      if (activeAssistantView) renderAssistantTrace(activeAssistantView);
-    });
-
-    rawToggle.addEventListener("change", () => {
-      if (selectedInspectorNode) renderInspectorDetail(selectedInspectorNode);
+    traceTabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        activeTraceTab = tab.dataset.traceTab || "overview";
+        if (activeAssistantView) renderAssistantTrace(activeAssistantView);
+        else updateTraceTabs();
+      });
     });
 
     closeTraceButton.addEventListener("click", () => {
