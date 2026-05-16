@@ -77,6 +77,11 @@ def _resolve_base_url(explicit: str | None) -> str:
     return os.environ.get("OPENAI_BASE_URL") or _OPENAI_FALLBACK_BASE_URL
 
 
+def _messages_to_openai(messages: list[Message]) -> list[dict[str, Any]]:
+    """Serialize messages exactly as they are sent to an OpenAI-compatible API."""
+    return [message.to_openai() for message in messages]
+
+
 @dataclass
 class AgentResult:
     """Result of an agent run."""
@@ -576,13 +581,22 @@ class Agent:
             assistant_msg: Message | None = None
             turn_usage: Usage | None = None
             llm_error: LLMProviderError | None = None
+            turn_finish_reason: str | None = None
+
+            yield StreamEvent(
+                type="llm_input",
+                turn=turn_count,
+                llm_model=self._config.model,
+                llm_messages=_messages_to_openai(conversation),
+                llm_tools=tool_schemas,
+                llm_max_tokens=current_max_tokens,
+            )
 
             if streaming:
                 # -- Streaming LLM call --
                 text_parts: list[str] = []
                 reasoning_parts: list[str] = []
                 tool_call_accum: dict[int, dict[str, str]] = {}
-                turn_finish_reason: str | None = None
 
                 try:
                     async for event in self._provider.chat_completion_stream(
@@ -705,6 +719,14 @@ class Agent:
                 return
 
             assert assistant_msg is not None
+
+            yield StreamEvent(
+                type="llm_output",
+                turn=turn_count,
+                llm_model=self._config.model,
+                llm_response=assistant_msg.to_openai(),
+                finish_reason=turn_finish_reason,
+            )
 
             # -- Record LLM telemetry (shared) --
             _llm_elapsed = (_time.monotonic() - _llm_start) * 1000

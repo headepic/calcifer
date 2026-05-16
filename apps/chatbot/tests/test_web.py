@@ -159,14 +159,21 @@ def test_index_html_contains_chat_surface():
     assert 'function groupToolEventsByCall(children)' in html
     assert 'function renderOverview(model)' in html
     assert 'function renderSteps(model)' in html
+    assert 'function buildAgentStepSequence(model)' in html
     assert 'function renderSources(model)' in html
     assert 'function renderRaw(model)' in html
     assert 'function renderInspector(model)' in html
     assert 'function renderInspectorDetail(node)' in html
     assert 'function formatStructuredValue(value)' in html
     assert 'function renderStructuredValue(value, options = {})' in html
+    assert 'function structuredNodeSummary(value)' in html
+    assert 'function renderStructuredSummary(key, value)' in html
     assert 'function appendJsonFieldRows(container, value)' in html
     assert 'className = "structured-json"' in html
+    assert 'className = "json-toggle"' in html
+    assert 'className = "json-toggle-summary"' in html
+    assert 'toggle.open = depth < 2;' in html
+    assert 'summary.append(renderStructuredSummary(key, item));' in html
     assert 'className = "json-field-row"' in html
     assert 'className = "tool-group-json"' in html
     assert '.loop-detail-payload .json-field-row {' in html
@@ -198,14 +205,107 @@ def test_index_html_contains_chat_surface():
     assert 'loopDetailPayload.replaceChildren(renderStructuredValue(payload));' in html
     assert 'JSON.stringify({summary: model.summary, trace: model.trace}, null, 2)' in html
     assert 'selectTraceNode(node, element)' in html
-    assert 'Model request' in html
-    assert 'Final answer' in html
-    assert 'Web search' in html
-    assert 'Reasoning summary' in html
+    assert 'Input' in html
+    assert 'Thought' in html
+    assert 'reasoning flow' in html
+    assert 'LLM input' in html
+    assert 'LLM output' in html
+    assert 'Action' in html
+    assert 'Observation' in html
+    assert 'Response' in html
+    assert 'Outcome' in html
+    assert 'answer generated' in html
+    assert 'function loopPurpose(turn)' in html
+    assert 'function thoughtSummary(turn, lastTurn, model)' in html
+    assert 'function buildThoughtStep(turn, lastTurn, model)' in html
+    assert 'function buildActionStep(turn, group)' in html
+    assert 'function buildObservationStep(turn, group)' in html
+    assert 'function buildResponseStep(model)' in html
+    assert 'function buildOutcomeNode(turn)' in html
+    assert 'function messageRoleList(messages)' in html
+    assert 'function toolResultSummary(content)' in html
+    assert 'function toolNameList(tools)' in html
+    assert 'function toolCallSummary(response)' in html
+    assert 'function sourceListSummary(sources)' in html
+    assert '.timeline-step[data-kind="action"],' in html
+    assert '.timeline-step[data-kind="action"] + .timeline-step[data-kind="observation"]' in html
+    assert '.timeline-step-detail > .tool-group-json .json-field-row' in html
+    assert 'grid-template-columns: minmax(0, 1fr);' in html
+    assert 'className = "timeline-turn-badge"' in html
+    assert 'turnBadge.textContent = String(node.turn_id);' in html
+    assert 'title.prepend(turnBadge);' in html
+    assert 'if (node.turn_id) item.dataset.turnId = String(node.turn_id);' in html
+    assert 'turn_id = null' in html
+    assert 'if (node.tool_call_id) item.dataset.toolCallId = node.tool_call_id;' in html
+    assert 'tool_call_id: group.tool_call_id,' in html
+    assert 'tool_call_id = ""' in html
+    assert 'return {id, kind, title, meta, preview, fields, detail, raw, status, children, tool_call_id, turn_id};' in html
+    assert 'const thoughtSummaryText = thoughtSummary(turn, lastTurn, model);' in html
+    assert 'preview: previewValue(thoughtSummaryText, 280)' in html
+    assert 'search results observed' in html
+    assert '`context: ${roles}`' in html
+    assert '`latest: ${lastMessage}`' in html
+    assert 'context: messageRoleList(detail.messages || [])' in html
+    assert 'latest: lastMessageSummary(detail.messages || [])' in html
+    assert 'tools_available' in html
+    assert 'last_message' not in html
+    assert '`messages: ${roles}`' not in html
+    assert '`last: ${lastMessage}`' not in html
+    assert 'assistant tool request' in html
+    assert 'tool result: ${resultCount} result' in html
+    assert 'content_summary' in html
+    assert 'next_step' in html
+    assert 'cited_links' in html
+    assert 'function normalizeCitationUrl(value)' in html
+    assert 'const markdownUrls = [];' in html
+    assert 'contentWithoutMarkdown' in html
+    assert 'function llmInputPreview(payload)' in html
+    assert 'function llmOutputPreview(payload)' in html
+    assert 'children: thoughtChildren' in html
+    assert 'children = []' in html
+    assert 'thoughtChildren.push(buildLlmInputNode(turn));' in html
+    assert 'thoughtChildren.push(buildLlmOutputNode(turn));' in html
+    assert 'thoughtChildren.push(buildOutcomeNode(turn));' in html
+    assert 'Raw provider notes' not in html
+    assert 'provider_note_count' not in html
+    assert 'source: "derived from trace events"' not in html
+    assert 'summary: thoughtSummaryText' not in html
+    assert html.index('steps.push(buildThoughtStep(turn, lastTurn, model));') < html.index('steps.push(buildActionStep(turn, group));')
+    assert html.index('steps.push(buildActionStep(turn, group));') < html.index('steps.push(buildObservationStep(turn, group));')
+    assert 'function appendTimelineStep(container, node, defaultOpen = false)' in html
+    assert 'function appendTimelineChildren(container, children)' in html
+    assert 'function timelineRawInfoNode(node)' in html
+    assert 'className = "timeline-info-button"' in html
+    assert 'rawButton.textContent = "i";' in html
+    assert 'rawButton.setAttribute("aria-label", `Show full ${node.title} payload`);' in html
+    assert 'event.stopPropagation();' in html
+    assert 'selectTraceNode(timelineRawInfoNode(node), rawButton);' in html
+    assert 'className = "reasoning-timeline"' in html
+    assert 'className = "timeline-step trace-step"' in html
+    assert 'className = "timeline-step-detail"' in html
+    assert 'appendJsonFieldRows(detail, node.fields);' in html
+    assert '`${notes.length} note' not in html
+    assert 'Understand request' not in html
+    assert 'Decide next action' not in html
+    assert 'Review web results' not in html
+    assert 'Compose answer' not in html
+    assert 'Model request' not in html
+    assert 'Final answer' not in html
+    assert 'Reasoning summary' not in html
+    assert 'compactModelNotes(turn.notes)' not in html
+    assert 'notesText || fallbackThought' not in html
+    assert 'detail: {turn_id: turn.turn_id, notes: turn.notes}' not in html
+    assert 'detail: model.inputNode.detail' not in html
+    assert 'detail: group.call?.detail || group.detail' not in html
+    assert 'detail: group.detail' not in html
+    assert 'detail: model.finalNode.detail' not in html
+    assert 'detail: turn.detail' not in html
+    assert 'reasoning_content' not in html
+    assert 'sources_included' not in html
+    assert 'appendLoopCard(agentLoopEvents, step)' not in html
     assert 'Verbose' not in html
     assert 'className = "loop-event"' not in html
     assert 'selectLoopEvent(payload, item)' not in html
-    assert 'className = "timeline-child"' not in html
     assert 'Assistant delta' not in html
     assert 'if (payload.type === "assistant_delta") {' in html
     assert 'return;\n        }\n        assistantTrace.push(payload);' in html
@@ -264,12 +364,32 @@ def test_web_app_stream_chat_emits_trace_and_completion():
         "run_id": "run-1",
         "turn_id": 1,
     }
+    assert any(
+        event["type"] == "trace"
+        and event["stage"] == "llm_input"
+        and event["label"] == "LLM input"
+        and event["detail"]["messages"][-1]["content"] == "hello"
+        and event["detail"]["model"] == "mock"
+        and event["run_id"] == "run-1"
+        and event["turn_id"] == 1
+        for event in emitted
+    )
     assert {
         "type": "assistant_delta",
         "text": "streamed web answer",
         "run_id": "run-1",
         "turn_id": 1,
     } in emitted
+    assert any(
+        event["type"] == "trace"
+        and event["stage"] == "llm_output"
+        and event["label"] == "LLM output"
+        and event["detail"]["response"]["content"] == "streamed web answer"
+        and event["detail"]["response"]["role"] == "assistant"
+        and event["run_id"] == "run-1"
+        and event["turn_id"] == 1
+        for event in emitted
+    )
     assert any(
         event["type"] == "trace"
         and event["stage"] == "llm_finish"

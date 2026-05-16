@@ -218,6 +218,8 @@ class StreamEvent:
     - "tool_call_delta": partial tool call
     - "thinking_delta": extended thinking content
     - "finish": stream ended with finish_reason
+    - "llm_input": full request sent to the model for a turn
+    - "llm_output": full response received from the model for a turn
     - "usage": token usage report
     - "error": API error
     - "turn_start": new agent turn beginning
@@ -239,6 +241,12 @@ class StreamEvent:
     thinking: str | None = None
     # finish
     finish_reason: str | None = None
+    # llm_input / llm_output
+    llm_messages: list[dict[str, Any]] | None = None
+    llm_tools: list[dict[str, Any]] | None = None
+    llm_model: str | None = None
+    llm_max_tokens: int | None = None
+    llm_response: dict[str, Any] | None = None
     # usage
     usage: Usage | None = None
     # error

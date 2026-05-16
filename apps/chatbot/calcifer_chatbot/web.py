@@ -322,6 +322,234 @@ def render_index_html() -> str:
       font-size: 12px;
       line-height: 1.45;
     }
+    .loop-card {
+      min-width: 0;
+      display: grid;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 8px;
+    }
+    .loop-card-head {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .loop-card-title {
+      min-width: 0;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 750;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .loop-card-meta {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .loop-card-body {
+      min-width: 0;
+      display: grid;
+      gap: 7px;
+      padding-left: 12px;
+      border-left: 1px solid var(--line-strong);
+    }
+    .loop-stage {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+      padding: 8px 9px;
+      border: 1px solid var(--line);
+      background: rgba(247, 247, 244, 0.72);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .loop-stage[data-kind="input"],
+    .loop-stage[data-kind="response"] {
+      background: var(--surface);
+    }
+    .loop-stage[data-kind="observation"][data-status="failed"] {
+      border-color: #efb2ad;
+      background: #fff6f5;
+    }
+    .loop-stage-head {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .loop-stage-title {
+      min-width: 0;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .loop-stage-meta {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .loop-stage-preview {
+      color: var(--muted-strong);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .loop-stage-detail {
+      min-width: 0;
+      display: grid;
+      gap: 7px;
+      padding-top: 2px;
+    }
+    .loop-stage-detail[hidden] {
+      display: none;
+    }
+    .reasoning-timeline {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+      position: relative;
+      padding-left: 12px;
+      border-left: 1px solid var(--line-strong);
+    }
+    .timeline-step {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+      padding: 8px 9px;
+      border: 1px solid var(--line);
+      background: rgba(247, 247, 244, 0.72);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .timeline-step[data-kind="input"],
+    .timeline-step[data-kind="response"] {
+      background: var(--surface);
+    }
+    .timeline-step[data-kind="thought"] {
+      background: #fbfbf8;
+    }
+    .timeline-step[data-kind="action"],
+    .timeline-step[data-kind="action"] + .timeline-step[data-kind="observation"] {
+      border-left: 3px solid var(--accent);
+    }
+    .timeline-step[data-kind="action"] {
+      border-bottom-left-radius: 4px;
+      border-bottom-right-radius: 4px;
+      margin-bottom: -3px;
+    }
+    .timeline-step[data-kind="action"] + .timeline-step[data-kind="observation"] {
+      border-top-left-radius: 4px;
+      border-top-right-radius: 4px;
+    }
+    .timeline-step[data-kind="observation"][data-status="failed"] {
+      border-color: #efb2ad;
+      background: #fff6f5;
+    }
+    .timeline-step-head {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .timeline-step-title {
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .timeline-title-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .timeline-turn-badge {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 6px;
+      border: 1px solid #e4c36f;
+      background: #fff6d9;
+      color: #7c4d00;
+      border-radius: 999px;
+      font-size: 10px;
+      line-height: 1;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .timeline-head-trailing {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .timeline-step-meta {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .timeline-info-button {
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--muted-strong);
+      border-radius: 999px;
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .timeline-info-button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .timeline-step-preview {
+      color: var(--muted-strong);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .timeline-step-detail {
+      min-width: 0;
+      display: grid;
+      gap: 7px;
+      padding-top: 2px;
+    }
+    .timeline-step-detail[hidden] {
+      display: none;
+    }
+    .timeline-children {
+      min-width: 0;
+      display: grid;
+      gap: 7px;
+      padding-left: 10px;
+      border-left: 1px solid var(--line);
+    }
     .trace-step {
       cursor: pointer;
     }
@@ -391,6 +619,40 @@ def render_index_html() -> str:
       display: grid;
       gap: 5px;
     }
+    .json-toggle {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+    .json-toggle-summary {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      color: var(--muted-strong);
+      cursor: pointer;
+      list-style-position: outside;
+    }
+    .json-toggle-summary::-webkit-details-marker {
+      color: var(--muted);
+    }
+    .json-summary-key {
+      color: var(--ink);
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }
+    .json-summary-meta {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 650;
+    }
+    .json-toggle-body {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+      padding-left: 14px;
+      border-left: 1px solid var(--line);
+    }
     .json-primitive[data-type="number"],
     .json-primitive[data-type="boolean"] {
       color: #0f625d;
@@ -410,6 +672,14 @@ def render_index_html() -> str:
     .tool-group-json .json-field-key {
       overflow-wrap: normal;
       white-space: nowrap;
+    }
+    .timeline-step-detail > .tool-group-json .json-field-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 3px;
+    }
+    .timeline-step-detail > .tool-group-json .json-field-key {
+      color: var(--muted);
+      white-space: normal;
     }
     .tool-group-card {
       margin-left: 12px;
@@ -1084,6 +1354,28 @@ def render_index_html() -> str:
       return root;
     }
 
+    function structuredNodeSummary(value) {
+      const parsed = parseMaybeJson(value);
+      if (Array.isArray(parsed)) return `[${parsed.length}]`;
+      if (parsed && typeof parsed === "object") {
+        const keys = Object.keys(parsed).length;
+        return `{${keys} ${keys === 1 ? "field" : "fields"}}`;
+      }
+      return primitiveType(parsed);
+    }
+
+    function renderStructuredSummary(key, value) {
+      const fragment = document.createDocumentFragment();
+      const keyNode = document.createElement("span");
+      keyNode.className = "json-summary-key";
+      keyNode.textContent = key;
+      const metaNode = document.createElement("span");
+      metaNode.className = "json-summary-meta";
+      metaNode.textContent = structuredNodeSummary(value);
+      fragment.append(keyNode, metaNode);
+      return fragment;
+    }
+
     function appendStructuredNode(container, value, options) {
       const parsed = parseMaybeJson(value);
       const depth = options.depth || 0;
@@ -1107,18 +1399,27 @@ def render_index_html() -> str:
       entries.slice(0, maxItems).forEach(([key, item]) => {
         const row = document.createElement("div");
         row.className = "json-field-row";
-        const keyNode = document.createElement("div");
-        keyNode.className = "json-field-key";
-        keyNode.textContent = key;
-        const valueNode = document.createElement("div");
-        valueNode.className = "json-field-value";
         if (isStructuredObject(parseMaybeJson(item))) {
-          valueNode.classList.add("is-nested");
-          appendStructuredNode(valueNode, item, {...options, depth: depth + 1});
+          const toggle = document.createElement("details");
+          toggle.className = "json-toggle";
+          toggle.open = depth < 2;
+          const summary = document.createElement("summary");
+          summary.className = "json-toggle-summary";
+          summary.append(renderStructuredSummary(key, item));
+          const body = document.createElement("div");
+          body.className = "json-toggle-body";
+          appendStructuredNode(body, item, {...options, depth: depth + 1});
+          toggle.append(summary, body);
+          row.appendChild(toggle);
         } else {
+          const keyNode = document.createElement("div");
+          keyNode.className = "json-field-key";
+          keyNode.textContent = key;
+          const valueNode = document.createElement("div");
+          valueNode.className = "json-field-value";
           valueNode.appendChild(renderPrimitiveValue(item));
+          row.append(keyNode, valueNode);
         }
-        row.append(keyNode, valueNode);
         list.appendChild(row);
       });
       if (entries.length > maxItems) {
@@ -1185,10 +1486,6 @@ def render_index_html() -> str:
 
     function compactMeta(parts) {
       return parts.filter(Boolean).join(" · ");
-    }
-
-    function compactModelNotes(notes) {
-      return (notes || []).join("").replace(/\\s+/g, " ").trim();
     }
 
     function parseMaybeJson(value) {
@@ -1302,7 +1599,7 @@ def render_index_html() -> str:
         ? `Searched web · ${webSearches} ${webSearches === 1 ? "query" : "queries"}`
         : toolCalls.length
           ? `${toolCalls.length} ${toolCalls.length === 1 ? "tool call" : "tool calls"}`
-          : "Reasoning summary";
+          : "Agent trace";
       return compactMeta([
         toolLabel,
         resultCount ? `${resultCount} results` : "",
@@ -1359,9 +1656,8 @@ def render_index_html() -> str:
         const args = group.call?.detail?.arguments || {};
         const query = args.query || group.resultPayload.query || group.progress.find((item) => item.detail?.progress?.query)?.detail.progress.query || "";
         group.tool_name = group.tool_name || group.call?.detail?.tool_name || "unknown";
-        group.title = group.tool_name === "web_search" ? "Web search" : `Tool: ${group.tool_name}`;
+        group.title = group.tool_name === "web_search" ? "Search web" : `Run ${group.tool_name}`;
         group.meta = compactMeta([
-          shortId(group.tool_call_id),
           group.result?.detail?.is_error ? "failed" : group.result ? "success" : "running",
           group.resultCount ? `${group.resultCount} results` : "",
         ]);
@@ -1400,7 +1696,7 @@ def render_index_html() -> str:
           const node = {
             id: `turn-${resolved}`,
             kind: "model",
-            title: `Model request ${resolved}`,
+            title: `Model turn ${resolved}`,
             meta: `turn ${resolved}`,
             preview: "Waiting for model response",
             turn_id: resolved,
@@ -1408,6 +1704,8 @@ def render_index_html() -> str:
             usage: null,
             notes: [],
             children: [],
+            llmInput: null,
+            llmOutput: null,
             raw_events: [],
             detail: {turn_id: resolved, finish_reason: "", usage: null, notes: []},
           };
@@ -1444,7 +1742,7 @@ def render_index_html() -> str:
           finalNode = {
             id: "final",
             kind: "final",
-            title: "Final answer",
+            title: "Response",
             meta: compactMeta([
               `${payload.turns ?? summary.turns ?? 0} turns`,
               `${payload.tokens ?? summary.usage.total_tokens ?? 0} tokens`,
@@ -1493,6 +1791,14 @@ def render_index_html() -> str:
 
         const turn = ensureTurn(payload.turn_id || summary.turn_id || 1);
         turn.raw_events.push(payload);
+        if (payload.stage === "llm_input") {
+          turn.llmInput = payload;
+          continue;
+        }
+        if (payload.stage === "llm_output") {
+          turn.llmOutput = payload;
+          continue;
+        }
         if (payload.stage === "model_note") {
           turn.notes.push(payload.detail || "");
           continue;
@@ -1577,6 +1883,8 @@ def render_index_html() -> str:
           finish_reason: turn.finish_reason,
           usage,
           notes: turn.notes,
+          llm_input: turn.llmInput?.detail || null,
+          llm_output: turn.llmOutput?.detail || null,
           tools: turn.toolGroups.map((group) => group.detail),
         };
       }
@@ -1594,11 +1902,12 @@ def render_index_html() -> str:
       const resultCount = toolGroups.reduce((total, group) => total + (group.resultCount || 0), 0);
       const statusLabel = terminalNode ? terminalNode.title : finalNode ? "Complete" : "Trace";
       const pathItems = [
-        inputNode.preview ? "Understood user request" : "",
+        inputNode.preview ? "Input" : "",
         ...toolGroups
           .filter((group) => group.tool_name === "web_search")
-          .map((group) => group.preview.replace(/^Query: /, "Searched web for ")),
-        finalNode ? "Generated final answer" : "",
+          .map((group) => group.preview.replace(/^Query: /, "Search web for ")),
+        resultCount ? `Observed ${resultCount} web result${resultCount === 1 ? "" : "s"}` : "",
+        finalNode ? "Response" : "",
         terminalNode ? terminalNode.title : "",
       ].filter(Boolean);
       return {
@@ -1745,6 +2054,467 @@ def render_index_html() -> str:
       agentLoopEvents.appendChild(empty);
     }
 
+    function appendTimelineChildren(container, children) {
+      if (!children?.length) return;
+      const list = document.createElement("div");
+      list.className = "timeline-children";
+      for (const child of children.filter(Boolean)) {
+        appendTimelineStep(list, child);
+      }
+      container.appendChild(list);
+    }
+
+    function timelineRawInfoNode(node) {
+      return {
+        ...node,
+        title: `${node.title} raw payload`,
+        detail: {},
+        raw: node.raw,
+      };
+    }
+
+    function appendTimelineStep(container, node, defaultOpen = false) {
+      const item = document.createElement("div");
+      item.className = "timeline-step trace-step";
+      item.dataset.kind = node.kind || "";
+      if (node.status) item.dataset.status = node.status;
+      if (node.tool_call_id) item.dataset.toolCallId = node.tool_call_id;
+      if (node.turn_id) item.dataset.turnId = String(node.turn_id);
+      item.setAttribute("role", "button");
+      item.setAttribute("tabindex", "0");
+
+      const head = document.createElement("div");
+      head.className = "timeline-step-head";
+      const title = document.createElement("div");
+      title.className = "timeline-step-title";
+      const titleLabel = document.createElement("span");
+      titleLabel.className = "timeline-title-label";
+      titleLabel.textContent = node.title;
+      title.appendChild(titleLabel);
+      if (node.turn_id) {
+        const turnBadge = document.createElement("span");
+        turnBadge.className = "timeline-turn-badge";
+        turnBadge.textContent = String(node.turn_id);
+        title.prepend(turnBadge);
+      }
+      if (node.raw && (node.kind === "llm_input" || node.kind === "llm_output")) {
+        const rawButton = document.createElement("button");
+        rawButton.className = "timeline-info-button";
+        rawButton.type = "button";
+        rawButton.textContent = "i";
+        rawButton.setAttribute("aria-label", `Show full ${node.title} payload`);
+        rawButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectTraceNode(timelineRawInfoNode(node), rawButton);
+        });
+        title.appendChild(rawButton);
+      }
+      const meta = document.createElement("div");
+      meta.className = "timeline-step-meta";
+      meta.textContent = node.meta || "";
+      const headTrailing = document.createElement("div");
+      headTrailing.className = "timeline-head-trailing";
+      headTrailing.appendChild(meta);
+      head.append(title, headTrailing);
+      item.append(head);
+
+      if (node.preview) {
+        const preview = document.createElement("div");
+        preview.className = "timeline-step-preview";
+        preview.textContent = node.preview;
+        item.append(preview);
+      }
+
+      const detail = document.createElement("div");
+      detail.className = "timeline-step-detail";
+      detail.hidden = !defaultOpen;
+      appendJsonFieldRows(detail, node.fields);
+      if (node.detail && Object.keys(compactJsonRows(node.detail)).length) {
+        detail.appendChild(renderStructuredValue(node.detail, {maxItems: 8, maxDepth: 2}));
+      }
+      appendTimelineChildren(detail, node.children);
+      item.append(detail);
+
+      const toggle = () => {
+        detail.hidden = !detail.hidden;
+        item.classList.toggle("is-selected", !detail.hidden);
+      };
+      item.addEventListener("click", (event) => {
+        if (event.target.tagName === "A") return;
+        if (event.target.closest(".timeline-step") !== item) return;
+        toggle();
+      });
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle();
+        }
+      });
+      container.appendChild(item);
+      return item;
+    }
+
+    function loopPurpose(turn) {
+      const toolGroups = turn.toolGroups || [];
+      if (toolGroups.some((group) => group.tool_name === "web_search")) return "Search";
+      if (toolGroups.length) return "Action";
+      if (turn.finish_reason === "stop") return "Answer";
+      if (turn.finish_reason === "tool_calls") return "Tool decision";
+      return "Model";
+    }
+
+    function thoughtSummary(turn, lastTurn, model) {
+      const response = turn.llmOutput?.detail?.response || {};
+      const toolCalls = response.tool_calls || [];
+      if (toolCalls.length) {
+        const tools = toolCalls
+          .map((call) => call.function?.name || call.name || "tool")
+          .filter(Boolean)
+          .join(", ");
+        return tools ? `Model chose to call ${tools} before answering.` : "Model chose to call a tool before answering.";
+      }
+      if (turn.toolGroups?.length) {
+        return "Tool work was selected and its observation will be used in a later loop.";
+      }
+      if (turn === lastTurn && model.finalNode) {
+        return model.sources.length
+          ? "Model generated the final answer from the conversation and observed sources."
+          : "Model generated the final answer from the conversation context.";
+      }
+      if (turn.finish_reason === "length") {
+        return "Model hit the output limit before completing this turn.";
+      }
+      if (turn.finish_reason) {
+        return `Model finished this turn with ${turn.finish_reason}.`;
+      }
+      return "Model is processing this turn.";
+    }
+
+    function stageNode({id, kind, title, meta = "", preview = "", fields = {}, detail = {}, raw = null, status = "", children = [], tool_call_id = "", turn_id = null}) {
+      return {id, kind, title, meta, preview, fields, detail, raw, status, children, tool_call_id, turn_id};
+    }
+
+    function usageFields(usage) {
+      if (!usage) return {};
+      return {
+        prompt_tokens: usage.prompt_tokens || 0,
+        completion_tokens: usage.completion_tokens || 0,
+        total_tokens: usage.total_tokens || 0,
+      };
+    }
+
+    function observationPreview(group) {
+      const sources = group.sources || [];
+      const sourceLines = sources.slice(0, 3).map((source, index) => `${index + 1}. ${source.title}`).filter(Boolean);
+      if (sourceLines.length) return sourceLines.join("\\n");
+      if (group.progress?.length) return group.progress.map((item) => item.title || item.preview).filter(Boolean).join("\\n");
+      return group.result ? group.result.preview : group.preview;
+    }
+
+    function messageRoleList(messages) {
+      return (messages || []).map((message) => message.role).filter(Boolean).join(" → ");
+    }
+
+    function toolCallSummary(response) {
+      const calls = response?.tool_calls || [];
+      return calls.map((call) => {
+        const name = call.function?.name || call.name || "tool";
+        const args = parseMaybeJson(call.function?.arguments || call.arguments || "");
+        if (args && typeof args === "object" && args.query) return `${name}(${args.query})`;
+        return name;
+      }).join(", ");
+    }
+
+    function toolResultSummary(content) {
+      const payload = normalizedResultPayload(content);
+      if (!Object.keys(payload).length) return "";
+      const query = payload.query ? ` for "${payload.query}"` : "";
+      const resultCount = typeof payload.result_count === "number"
+        ? payload.result_count
+        : Array.isArray(payload.results)
+          ? payload.results.length
+          : null;
+      if (resultCount !== null) return `tool result: ${resultCount} result${resultCount === 1 ? "" : "s"}${query}`;
+      if (payload.message) return previewValue(payload.message, 220);
+      return "";
+    }
+
+    function lastMessageSummary(messages) {
+      const lastMessage = (messages || [])[(messages || []).length - 1] || {};
+      if (!lastMessage.role) return "";
+      if (lastMessage.role === "tool") {
+        return toolResultSummary(lastMessage.content) || "tool result";
+      }
+      if (lastMessage.tool_calls?.length) {
+        return `assistant tool request: ${toolCallSummary(lastMessage)}`;
+      }
+      const content = typeof lastMessage.content === "string"
+        ? lastMessage.content
+        : JSON.stringify(lastMessage.content || "");
+      const toolSummary = toolResultSummary(content);
+      if (toolSummary) return toolSummary;
+      return previewValue(`${lastMessage.role}: ${content}`, 260);
+    }
+
+    function toolNameList(tools) {
+      return (tools || [])
+        .map((tool) => tool.function?.name || tool.name || "")
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    function normalizeCitationUrl(value) {
+      let text = String(value || "");
+      while (text && ".,;:!?*_)]}>".includes(text[text.length - 1])) {
+        text = text.slice(0, -1);
+      }
+      return text;
+    }
+
+    function citedLinkCount(text) {
+      const content = text || "";
+      const markdownPattern = new RegExp("\\\\[[^\\\\]]+\\\\]\\\\((https?:\\\\/\\\\/[^\\\\s)]+)\\\\)", "g");
+      const markdownUrls = [];
+      let match = markdownPattern.exec(content);
+      while (match) {
+        markdownUrls.push(normalizeCitationUrl(match[1]));
+        match = markdownPattern.exec(content);
+      }
+      const contentWithoutMarkdown = content.replace(markdownPattern, "");
+      const bareLinks = contentWithoutMarkdown.match(new RegExp("https?:\\\\/\\\\/[^\\\\s)]+", "g")) || [];
+      return new Set([...markdownUrls, ...bareLinks.map(normalizeCitationUrl)]).size;
+    }
+
+    function llmInputPreview(payload) {
+      const detail = payload?.detail || {};
+      const messages = detail.messages || [];
+      const roles = messageRoleList(messages);
+      const lastMessage = lastMessageSummary(messages);
+      return previewValue([
+        roles ? `context: ${roles}` : "",
+        lastMessage ? `latest: ${lastMessage}` : "",
+      ].filter(Boolean).join("\\n"), 260);
+    }
+
+    function sourceListSummary(sources) {
+      return (sources || [])
+        .slice(0, 3)
+        .map((source, index) => {
+          const host = source.host || hostLabel(source.url || "");
+          return `${index + 1}. ${compactMeta([source.title, host])}`;
+        })
+        .filter(Boolean)
+        .join("\\n");
+    }
+
+    function llmOutputPreview(payload) {
+      const response = payload?.detail?.response || {};
+      if (response.tool_calls?.length) {
+        const calls = response.tool_calls
+          .map((call) => call.function?.name || call.name || "tool")
+          .join(", ");
+        return `tool_calls: ${calls}`;
+      }
+      return previewValue(response.content || "model response", 260);
+    }
+
+    function buildLlmInputNode(turn) {
+      const detail = turn.llmInput?.detail || {};
+      return stageNode({
+        id: `turn-${turn.turn_id}-llm-input`,
+        kind: "llm_input",
+        title: "LLM input",
+        meta: compactMeta([
+          detail.model || "",
+          `${detail.message_count || detail.messages?.length || 0} messages`,
+          `${detail.tool_count || detail.tools?.length || 0} tools`,
+        ]),
+        preview: llmInputPreview(turn.llmInput),
+        fields: {
+          model: detail.model || "",
+          context: messageRoleList(detail.messages || []),
+          tools_available: toolNameList(detail.tools || []),
+          latest: lastMessageSummary(detail.messages || []),
+          max_tokens: detail.max_tokens || "",
+        },
+        raw: turn.llmInput,
+      });
+    }
+
+    function buildLlmOutputNode(turn) {
+      const detail = turn.llmOutput.detail || {};
+      const response = detail.response || {};
+      return stageNode({
+        id: `turn-${turn.turn_id}-llm-output`,
+        kind: "llm_output",
+        title: "LLM output",
+        meta: compactMeta([
+          response.tool_calls?.length ? `${response.tool_calls.length} tool ${response.tool_calls.length === 1 ? "call" : "calls"}` : response.content ? "content" : "",
+          detail.finish_reason ? `finish ${detail.finish_reason}` : "",
+        ]),
+        preview: llmOutputPreview(turn.llmOutput),
+        fields: {
+          finish_reason: detail.finish_reason || "",
+          tool_calls: toolCallSummary(response),
+          content_summary: response.content ? previewValue(response.content, 320) : "",
+        },
+        raw: turn.llmOutput,
+      });
+    }
+
+    function buildOutcomeNode(turn) {
+      const nextStep = turn.toolGroups?.length
+        ? turn.toolGroups.map((group) => group.tool_name || "tool").join(", ")
+        : turn.finish_reason === "stop"
+          ? "Response"
+          : turn.finish_reason || "pending";
+      return stageNode({
+        id: `turn-${turn.turn_id}-outcome`,
+        kind: "outcome",
+        title: "Outcome",
+        meta: compactMeta([
+          turn.finish_reason ? `finish ${turn.finish_reason}` : "pending",
+          turn.usage ? `${turn.usage.total_tokens} tokens` : "",
+        ]),
+        preview: compactMeta([
+          turn.finish_reason ? `LLM returned ${turn.finish_reason}` : "Waiting for model outcome",
+          turn.toolGroups?.length ? `${turn.toolGroups.length} next ${turn.toolGroups.length === 1 ? "action" : "actions"}` : "",
+        ]),
+        fields: {
+          finish_reason: turn.finish_reason || "pending",
+          next_step: nextStep,
+          ...usageFields(turn.usage),
+        },
+        raw: turn.raw_events,
+      });
+    }
+
+    function buildThoughtStep(turn, lastTurn, model) {
+      const thoughtSummaryText = thoughtSummary(turn, lastTurn, model);
+      const thoughtChildren = [];
+      if (turn.llmInput) thoughtChildren.push(buildLlmInputNode(turn));
+      if (turn.llmOutput) thoughtChildren.push(buildLlmOutputNode(turn));
+      thoughtChildren.push(buildOutcomeNode(turn));
+      return stageNode({
+        id: `turn-${turn.turn_id}-thought`,
+        kind: "thought",
+        title: "Thought",
+        meta: "reasoning flow",
+        preview: previewValue(thoughtSummaryText, 280),
+        raw: turn.raw_events.filter((event) => event.stage === "model_note"),
+        children: thoughtChildren,
+        turn_id: turn.turn_id,
+      });
+    }
+
+    function buildActionStep(turn, group) {
+      const args = group.call?.detail?.arguments || {};
+      return stageNode({
+        id: `turn-${turn.turn_id}-action-${group.tool_call_id || "tool"}`,
+        kind: "action",
+        title: "Action",
+        meta: group.tool_name || "tool",
+        preview: group.tool_name === "web_search" && args.query ? `web_search · ${args.query}` : group.preview,
+        fields: {
+          tool: group.tool_name,
+          ...args,
+        },
+        raw: group.call?.raw || group.raw,
+        tool_call_id: group.tool_call_id,
+        turn_id: turn.turn_id,
+      });
+    }
+
+    function buildObservationStep(turn, group) {
+      const status = group.result?.detail?.is_error ? "failed" : group.result ? "success" : "running";
+      const duration = group.resultPayload?.duration_seconds;
+      const topSources = sourceListSummary(group.sources || []);
+      return stageNode({
+        id: `turn-${turn.turn_id}-observation-${group.tool_call_id || "tool"}`,
+        kind: "observation",
+        title: "Observation",
+        meta: compactMeta([
+          status,
+          group.resultCount ? `${group.resultCount} results` : "",
+          duration ? `${duration}s` : "",
+        ]),
+        preview: observationPreview(group),
+        fields: {
+          status,
+          result_count: group.resultCount || 0,
+          duration_seconds: duration || "",
+          top_sources: topSources,
+        },
+        raw: group.raw,
+        status,
+        tool_call_id: group.tool_call_id,
+        turn_id: turn.turn_id,
+      });
+    }
+
+    function buildResponseStep(model) {
+      return stageNode({
+        id: "response",
+        kind: "response",
+        title: "Response",
+        meta: compactMeta([
+          "answer generated",
+          model.stats.resultCount ? `${model.stats.resultCount} search results observed` : "",
+        ]),
+        preview: model.finalNode.preview,
+        fields: {
+          status: "answer generated",
+          search_results_observed: model.stats.resultCount || 0,
+          cited_links: citedLinkCount(model.finalNode.preview),
+          total_tokens: model.stats.tokens || 0,
+        },
+        raw: model.finalNode.raw,
+      });
+    }
+
+    function buildAgentStepSequence(model) {
+      const steps = [];
+      const inputText = model.inputNode?.preview || model.summary.input || "";
+      steps.push(stageNode({
+        id: "step-input",
+        kind: "input",
+        title: "Input",
+        meta: "user request",
+        preview: inputText,
+        fields: {
+          input: model.inputNode?.detail?.input || inputText,
+        },
+        raw: model.inputNode.raw,
+      }));
+
+      const lastTurn = model.turns[model.turns.length - 1] || null;
+      for (const turn of model.turns) {
+        steps.push(buildThoughtStep(turn, lastTurn, model));
+        for (const group of turn.toolGroups || []) {
+          steps.push(buildActionStep(turn, group));
+          steps.push(buildObservationStep(turn, group));
+        }
+      }
+
+      if (model.finalNode) steps.push(buildResponseStep(model));
+
+      if (model.terminalNode) {
+        steps.push(stageNode({
+          id: "terminal",
+          kind: model.terminalNode.kind,
+          title: model.terminalNode.title,
+          meta: model.terminalNode.meta,
+          preview: model.terminalNode.preview,
+          fields: model.terminalNode.detail,
+          detail: model.terminalNode.detail,
+          raw: model.terminalNode.raw,
+          status: model.terminalNode.kind,
+        }));
+      }
+      return steps;
+    }
+
     function renderOverview(model) {
       agentLoopDetail.hidden = true;
       const card = document.createElement("div");
@@ -1806,26 +2576,12 @@ def render_index_html() -> str:
 
     function renderSteps(model) {
       agentLoopDetail.hidden = true;
-      appendTraceStep(agentLoopEvents, model.inputNode);
-      for (const turn of model.turns) {
-        appendTraceStep(agentLoopEvents, turn);
-        if (turn.notes.length) {
-          appendToolGroup(agentLoopEvents, {
-            id: `${turn.id}-notes`,
-            kind: "model_note",
-            title: "Reasoning summary",
-            meta: `${turn.notes.length} model notes`,
-            preview: previewValue(compactModelNotes(turn.notes), 220),
-            detail: {turn_id: turn.turn_id, notes: turn.notes},
-            raw: turn.raw_events.filter((event) => event.stage === "model_note"),
-          });
-        }
-        for (const group of turn.toolGroups || []) {
-          appendToolGroup(agentLoopEvents, group);
-        }
+      const timeline = document.createElement("div");
+      timeline.className = "reasoning-timeline";
+      for (const step of buildAgentStepSequence(model)) {
+        appendTimelineStep(timeline, step);
       }
-      if (model.terminalNode) appendTraceStep(agentLoopEvents, model.terminalNode);
-      if (model.finalNode) appendTraceStep(agentLoopEvents, model.finalNode);
+      agentLoopEvents.appendChild(timeline);
     }
 
     function renderSources(model) {
@@ -2136,6 +2892,40 @@ def _stream_event_payload(
             "type": "trace",
             "stage": "turn_end",
             "label": f"Turn {event.turn} ended",
+            "run_id": run_id,
+            "turn_id": event.turn or turn_id,
+        }
+    if event.type == "llm_input":
+        messages = event.llm_messages or []
+        tools = event.llm_tools or []
+        detail = {
+            "model": event.llm_model or "",
+            "messages": messages,
+            "tools": tools,
+            "max_tokens": event.llm_max_tokens,
+            "message_count": len(messages),
+            "tool_count": len(tools),
+        }
+        return {
+            "type": "trace",
+            "stage": "llm_input",
+            "label": "LLM input",
+            "detail": detail,
+            "run_id": run_id,
+            "turn_id": event.turn or turn_id,
+        }
+    if event.type == "llm_output":
+        response = event.llm_response or {}
+        detail = {
+            "model": event.llm_model or "",
+            "response": response,
+            "finish_reason": event.finish_reason or "",
+        }
+        return {
+            "type": "trace",
+            "stage": "llm_output",
+            "label": "LLM output",
+            "detail": detail,
             "run_id": run_id,
             "turn_id": event.turn or turn_id,
         }
