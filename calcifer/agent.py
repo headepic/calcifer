@@ -27,9 +27,9 @@ from .config import CalciferConfig, MCPServerConfig
 from .services.compact.context import ContextManager
 from .types.message import APIErrorType, Message, StreamEvent, ToolCall, Usage
 from .services.tools.orchestrator import StreamingToolExecutor, run_tools
-from .services.api.provider import LLMProvider, LLMProviderError
+from .services.api.provider import LLMProvider, LLMProviderError, classify_api_error
 from .tool import Tool
-from .types.tools import ToolContext, ToolResult
+from .types.tools import ToolContext, ToolProgress, ToolResult
 from .utils.cost_tracker import CostTracker
 from .telemetry.spans import (
     start_interaction_span, end_interaction_span,
@@ -321,11 +321,15 @@ class Agent:
         return [t.to_openai_schema() for t in self._tools]
 
     async def _execute_tools(
-        self, tool_calls: list[ToolCall], context: ToolContext
+        self,
+        tool_calls: list[ToolCall],
+        context: ToolContext,
+        on_progress: Callable[[ToolProgress], None] | None = None,
     ) -> list[Message]:
         return await run_tools(
             tool_calls, self._tools_by_name, context,
             max_concurrency=self._config.max_tool_concurrency,
+            on_progress=on_progress,
         )
 
     async def _maybe_compact(self, conversation: list[Message], context: ToolContext | None = None) -> list[Message]:
@@ -556,9 +560,15 @@ class Agent:
             conversation = await self._maybe_compact(conversation, context)
             context.messages = conversation
 
+            tool_progress_events: list[ToolProgress] = []
+
+            def record_tool_progress(progress: ToolProgress) -> None:
+                tool_progress_events.append(progress)
+
             # Set up streaming tool executor (used in streaming mode)
             streaming_executor = StreamingToolExecutor(
                 self._tools_by_name, context, self._config.max_tool_concurrency,
+                on_progress=record_tool_progress,
             ) if streaming else None
 
             _llm_start = _time.monotonic()
@@ -570,6 +580,7 @@ class Agent:
             if streaming:
                 # -- Streaming LLM call --
                 text_parts: list[str] = []
+                reasoning_parts: list[str] = []
                 tool_call_accum: dict[int, dict[str, str]] = {}
                 turn_finish_reason: str | None = None
 
@@ -578,11 +589,15 @@ class Agent:
                         messages=conversation, tools=tool_schemas,
                         max_tokens_override=current_max_tokens,
                     ):
+                        if llm_error:
+                            continue
                         if event.type == "text_delta":
                             text_parts.append(event.text or "")
                             yield event
 
                         elif event.type == "thinking_delta":
+                            if event.thinking:
+                                reasoning_parts.append(event.thinking)
                             yield event
 
                         elif event.type == "tool_call_delta":
@@ -617,20 +632,19 @@ class Agent:
                             yield event
 
                         elif event.type == "error":
-                            # Check if recoverable (prompt_too_long)
-                            if event.error_code and event.error_code in (413, 400):
+                            if event.error_code == 413:
                                 error_type = APIErrorType.PROMPT_TOO_LONG
                             else:
-                                error_type = None
-
-                            if error_type == APIErrorType.PROMPT_TOO_LONG:
-                                if not has_attempted_reactive_compact:
-                                    logger.warning("Prompt too long → reactive compact...")
-                                    conversation = self._context_mgr.reactive_compact(conversation)
-                                    has_attempted_reactive_compact = True
-                                    yield StreamEvent(type="turn_end", turn=turn_count)
-                                    continue  # retry the turn
-                            yield event
+                                error_type = classify_api_error(
+                                    event.error_code,
+                                    event.error or "",
+                                )
+                            llm_error = LLMProviderError(
+                                event.error or "Stream error",
+                                status_code=event.error_code,
+                                error_type=error_type,
+                            )
+                            continue
 
                 except LLMProviderError as e:
                     llm_error = e
@@ -646,6 +660,7 @@ class Agent:
                         role="assistant",
                         content="".join(text_parts) or None,
                         tool_calls=tool_calls,
+                        reasoning_content="".join(reasoning_parts) or None,
                     )
                     if turn_finish_reason == "length":
                         assistant_msg.metadata["api_error"] = "max_output_tokens"
@@ -685,9 +700,9 @@ class Agent:
                         continue
                     except Exception:
                         yield StreamEvent(type="error", error=str(llm_error), error_code=llm_error.status_code)
-                        break
+                        return
                 yield StreamEvent(type="error", error=str(llm_error), error_code=llm_error.status_code)
-                break
+                return
 
             assert assistant_msg is not None
 
@@ -785,14 +800,34 @@ class Agent:
                 submitted_ids = {t.id for t in streaming_executor._tracked}
                 remaining = [tc for tc in tool_calls if tc.id not in submitted_ids]
                 if remaining:
-                    extra = await self._execute_tools(remaining, context)
+                    extra = await self._execute_tools(
+                        remaining,
+                        context,
+                        on_progress=record_tool_progress,
+                    )
                     tool_results.extend(extra)
             else:
                 # Non-streaming mode: run tools via orchestrator
                 context.abort_signal = self._abort_event.is_set()
-                tool_results = await self._execute_tools(tool_calls, context)
+                tool_results = await self._execute_tools(
+                    tool_calls,
+                    context,
+                    on_progress=record_tool_progress,
+                )
 
             self._in_progress_tool_ids.clear()
+
+            # Emit tool progress events before final tool results so UIs can show
+            # intra-tool milestones in the agent loop timeline.
+            for progress in tool_progress_events:
+                yield StreamEvent(
+                    type="tool_progress",
+                    turn=turn_count,
+                    tool_call_id=progress.tool_use_id or None,
+                    tool_progress_type=progress.type,
+                    tool_progress_data=progress.data,
+                    tool_progress_message=progress.message,
+                )
 
             # Emit tool_call_result events
             for result_msg in tool_results:

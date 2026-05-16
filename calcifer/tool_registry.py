@@ -16,6 +16,7 @@ from .tools.GlobTool import GlobTool
 from .tools.GrepTool import GrepTool
 from .tools.SkillTool import SkillTool
 from .tools.ToolSearchTool import ToolSearchTool
+from .tools.WebSearchTool import WebSearchTool
 
 
 def get_all_builtin_tools() -> list[Tool]:
@@ -29,6 +30,7 @@ def get_all_builtin_tools() -> list[Tool]:
         GrepTool(),
         SkillTool(),
         ToolSearchTool(),
+        WebSearchTool(),
     ]
 
 

@@ -12,7 +12,7 @@ Provider-agnostic 的 Python Agent Runner SDK。复刻 Claude Code Agent Runner 
 
 - **统一的 Agent 循环**：`run()` / `run_sync()` / `run_stream()` 三种入口共用同一套 loop
 - **错误恢复级联**：`prompt_too_long` → 压缩；`max_output_tokens` → 扩容 / resume；`429 / 529` → 指数退避 + 模型降级
-- **8 个内置工具**：Bash、FileRead、FileWrite、FileEdit、Glob、Grep、SkillTool、ToolSearchTool
+- **9 个内置工具**：Bash、FileRead、FileWrite、FileEdit、Glob、Grep、WebSearch、SkillTool、ToolSearchTool
 - **6 层上下文压缩管线**：tool-budget → 裁剪 → 微压缩 → autocompact → fold → 应急
 - **MCP 客户端**：支持 stdio / SSE / HTTP / WebSocket 四种 transport，OAuth token refresh，session 过期自动重建
 - **Skill 系统**：Markdown + YAML frontmatter，基于 path glob 的条件激活，inline / fork 执行模式
@@ -165,7 +165,7 @@ Agent(run / run_sync / run_stream)
   │                         工具并行，写入型工具串行；只读工具可中断，写入必须跑完
   │
   ├── 内置工具              Bash、FileRead、FileWrite、FileEdit、Glob、Grep、
-  │                         SkillTool、ToolSearchTool
+  │                         WebSearch、SkillTool、ToolSearchTool
   │
   ├── MCP 客户端            stdio/SSE/HTTP/WS 四种 transport，OAuth refresh，
   │                         工具 schema 缓存，单次内容 200K 上限
@@ -213,7 +213,7 @@ pytest tests/ -q \
   --ignore=tests/test_e2e_mcp_skill.py
 ```
 
-426 个 mock 测试覆盖 agent 循环、上下文压缩管线、工具编排、MCP 客户端、
+Mock 测试覆盖 agent 循环、上下文压缩管线、工具编排、MCP 客户端、
 Skill 系统、Hook、Coordinator、side query、testing 模块、流式 fallback 等。
 E2E 测试需要真实 LLM endpoint，默认排除。
 
@@ -228,14 +228,15 @@ E2E 测试需要真实 LLM endpoint，默认排除。
 `apps/` 目录下是基于 Calcifer SDK 构建的独立应用。它们和 SDK 物理隔离：
 各自有 `pyproject.toml`，各自 `pip install -e`，SDK 安装时不会拉入。
 
-- [`apps/tui/`](apps/tui/) — 极简终端聊天 UI，`calcifer-tui` 命令
+- [`apps/ask/`](apps/ask/) — 一次性代码库问答 CLI，`ask` 命令
+- [`apps/chatbot/`](apps/chatbot/) — 可复用会话对象 + 交互式 chatbot，`calcifer-chatbot` 命令
 
-装 SDK + TUI 的完整流程：
+装 SDK + chatbot 的完整流程：
 
 ```bash
 pip install -e .             # 装 SDK 本体
-pip install -e apps/tui      # 装 TUI（会在 venv 里找到已装好的 calcifer）
-calcifer-tui
+pip install -e apps/chatbot  # 装 chatbot（会在 venv 里找到已装好的 calcifer）
+calcifer-chatbot
 ```
 
 ## 版本管理
@@ -259,7 +260,7 @@ pip install "git+https://github.com/headepic/calcifer.git@v0.3.0"
 - Anthropic 专属特性（`cache_control`、beta headers、prompt caching）
 - 把 Anthropic SDK 作为依赖
 - 多 provider 抽象层（需要 20+ provider 请用 `pi-ai` 或 `litellm`）
-- 内置 TUI / Web UI / CLI（这是一个库，不是应用）
+- 内置 Web UI / CLI（核心包是库，不捆绑应用）
 - Tool permission / sandbox 系统
 
 ## License

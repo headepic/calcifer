@@ -2,21 +2,21 @@
 
 One-shot codebase Q&A CLI. 问一个关于当前仓库的问题，拿到一个带文件引用的 Markdown 答案。
 
-位于 `apps/ask/`，是 Calcifer SDK 的第二个消费者（第一个是 `apps/tui/`）。
+位于 `apps/ask/`，是 Calcifer SDK 的一个独立消费者。
 和 SDK 物理隔离：独立 `pyproject.toml`，独立 package（`ask`），单向依赖 calcifer。
 
-## 和 TUI 的区别
+## 和 chatbot 的区别
 
 这两个 app 故意覆盖 SDK 的不同 surface，目的是 dogfood 整个 API 表面：
 
-| 维度 | `apps/tui/` | `apps/ask/` |
+| 维度 | `apps/chatbot/` | `apps/ask/` |
 |---|---|---|
 | 交互形态 | 长会话，多轮聊天 | 一次性问答 |
-| Agent API | `run_stream()` 流式 | `run_sync()` 一次性 |
-| 自定义 tool | ❌ 只用内置 | ✅ `git_log` 通过 `@tool` 装饰器 |
+| Agent API | `run_stream()` 流式 + 会话封装 | `run_sync()` 一次性 |
+| 自定义 tool | ❌ 只用内置工具模式 | ✅ `git_log` 通过 `@tool` 装饰器 |
 | Stop hook | ❌ | ✅ `register_stop_hook` 限 8 轮 |
-| 测试 | ❌ | ✅ `MockProvider` 单元测试 |
-| 工具集 | 全部 8 个内置 | 过滤成只读（glob/grep/file_read）+ 自定义 |
+| 测试 | ✅ `MockProvider` 单元测试 | ✅ `MockProvider` 单元测试 |
+| 工具集 | none / readonly / all 三档 | 过滤成只读（glob/grep/file_read）+ 自定义 |
 
 ## 特性
 

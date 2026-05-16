@@ -1,7 +1,7 @@
 """Ask your codebase one question, get one answer.
 
-This is a deliberately small Calcifer SDK consumer that exercises the
-parts of the SDK the TUI doesn't:
+This is a deliberately small Calcifer SDK consumer that exercises a
+one-shot question-answering shape:
 
 - `Agent.run_sync()` — one-shot batch usage (not streaming)
 - `@tool` decorator for a custom tool (`git_log`)

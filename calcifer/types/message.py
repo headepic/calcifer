@@ -75,6 +75,9 @@ class Message:
     # Optional metadata (not sent to API)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # OpenAI-compatible reasoning payloads, e.g. DeepSeek thinking-mode turns.
+    reasoning_content: str | None = None
+
     def to_openai(self) -> dict[str, Any]:
         """Convert to OpenAI API message format."""
         msg: dict[str, Any] = {"role": self.role}
@@ -87,6 +90,9 @@ class Message:
 
         if self.tool_call_id is not None:
             msg["tool_call_id"] = self.tool_call_id
+
+        if self.reasoning_content is not None:
+            msg["reasoning_content"] = self.reasoning_content
 
         return msg
 
@@ -243,6 +249,10 @@ class StreamEvent:
     # tool_call_result
     tool_result_content: str | None = None
     tool_is_error: bool = False
+    # tool_progress
+    tool_progress_type: str | None = None
+    tool_progress_data: dict[str, Any] | None = None
+    tool_progress_message: str | None = None
     # run_complete
     result: Any | None = None
 

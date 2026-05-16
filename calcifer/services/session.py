@@ -65,6 +65,8 @@ class SessionStorage:
             d["tool_call_id"] = msg.tool_call_id
         if msg.is_meta:
             d["is_meta"] = True
+        if msg.reasoning_content is not None:
+            d["reasoning_content"] = msg.reasoning_content
         return d
 
     def _dict_to_message(self, d: dict[str, Any]) -> Message:
@@ -79,6 +81,7 @@ class SessionStorage:
             tool_call_id=d.get("tool_call_id"),
             uuid=d.get("uuid", uuid4().hex),
             is_meta=d.get("is_meta", False),
+            reasoning_content=d.get("reasoning_content"),
         )
 
     def save(

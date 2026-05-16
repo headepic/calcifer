@@ -19,7 +19,8 @@ import httpx
 import pytest
 
 from calcifer.services.api.provider import LLMProvider
-from calcifer.types.message import Message, StreamEvent, Usage
+from calcifer import Agent, CalciferConfig, tool
+from calcifer.types.message import Message, StreamEvent, ToolCall, Usage
 
 
 def _make_empty_response() -> httpx.Response:
@@ -64,6 +65,38 @@ async def _fake_stream(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
         usage=Usage(prompt_tokens=5, completion_tokens=12, total_tokens=17),
     )
     yield StreamEvent(type="finish", finish_reason="stop")
+
+
+async def _fake_reasoning_tool_stream(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+    yield StreamEvent(type="thinking_delta", thinking="Need source lookup.")
+    yield StreamEvent(
+        type="tool_call_delta",
+        tool_call_index=0,
+        tool_call_id="tc_lookup",
+        tool_call_name="lookup",
+        tool_call_arguments='{"query":"docs"}',
+    )
+    yield StreamEvent(
+        type="usage",
+        usage=Usage(prompt_tokens=5, completion_tokens=12, total_tokens=17),
+    )
+    yield StreamEvent(type="finish", finish_reason="tool_calls")
+
+
+class _FakeStreamResponse:
+    def __init__(self, lines: list[str]) -> None:
+        self.status_code = 200
+        self._lines = lines
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
 
 
 @pytest.mark.asyncio
@@ -164,3 +197,160 @@ async def test_legitimate_empty_content_with_tool_calls_does_not_trigger_fallbac
     assert msg.tool_calls and len(msg.tool_calls) == 1
     assert msg.tool_calls[0].function_name == "do_thing"
     assert provider._force_stream_for_chat_completion is False
+
+
+def test_message_to_openai_round_trips_reasoning_content_for_tool_turns():
+    msg = Message(
+        role="assistant",
+        content=None,
+        tool_calls=[
+            ToolCall(id="tc_1", function_name="lookup", arguments='{"query":"docs"}')
+        ],
+        reasoning_content="Need source lookup.",
+    )
+
+    payload = msg.to_openai()
+
+    assert payload["reasoning_content"] == "Need source lookup."
+
+
+def test_parse_response_preserves_reasoning_content():
+    provider = LLMProvider(api_key="x", base_url="http://x", model="m")
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "reasoning_content": "Need source lookup.",
+                    "tool_calls": [
+                        {
+                            "id": "tc_1",
+                            "type": "function",
+                            "function": {
+                                "name": "lookup",
+                                "arguments": '{"query":"docs"}',
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 12, "total_tokens": 17},
+    }
+
+    msg, _usage = provider._parse_response(data)
+
+    assert msg.reasoning_content == "Need source lookup."
+
+
+@pytest.mark.asyncio
+async def test_stream_parser_emits_deepseek_reasoning_content_as_thinking_delta():
+    provider = LLMProvider(api_key="x", base_url="http://x", model="m")
+    provider._client = MagicMock()
+    provider._client.stream = MagicMock(
+        return_value=_FakeStreamResponse(
+            [
+                'data: {"choices":[{"delta":{"reasoning_content":"Need "},"finish_reason":null}]}',
+                'data: {"choices":[{"delta":{"reasoning_content":"source lookup."},"finish_reason":null}]}',
+                'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+            ]
+        )
+    )
+    provider._client.aclose = AsyncMock()
+
+    events = [
+        event
+        async for event in provider.chat_completion_stream(
+            messages=[Message(role="user", content="hi")]
+        )
+    ]
+
+    assert [event.thinking for event in events if event.type == "thinking_delta"] == [
+        "Need ",
+        "source lookup.",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_streaming_accumulator_preserves_reasoning_content_for_tool_calls(monkeypatch):
+    provider = LLMProvider(api_key="x", base_url="http://x", model="m")
+    monkeypatch.setattr(provider, "chat_completion_stream", _fake_reasoning_tool_stream)
+
+    msg, _usage = await provider._chat_completion_via_stream(
+        messages=[Message(role="user", content="hi")]
+    )
+
+    assert msg.reasoning_content == "Need source lookup."
+
+
+@tool(name="lookup", description="Look up a source")
+def lookup_tool(query: str) -> str:
+    return f"result for {query}"
+
+
+class _ReasoningToolProvider:
+    def __init__(self) -> None:
+        self.calls: list[list[Message]] = []
+
+    async def chat_completion(
+        self,
+        messages: list[Message],
+        tools: list[dict] | None = None,
+        model_override: str | None = None,
+        max_tokens_override: int | None = None,
+    ) -> tuple[Message, Usage]:
+        return Message(role="assistant", content="compact summary"), Usage()
+
+    async def chat_completion_stream(
+        self,
+        messages: list[Message],
+        tools: list[dict] | None = None,
+        model_override: str | None = None,
+        max_tokens_override: int | None = None,
+    ) -> AsyncIterator[StreamEvent]:
+        self.calls.append(list(messages))
+        if len(self.calls) == 1:
+            yield StreamEvent(type="thinking_delta", thinking="Need source lookup.")
+            yield StreamEvent(
+                type="tool_call_delta",
+                tool_call_index=0,
+                tool_call_id="tc_lookup",
+                tool_call_name="lookup",
+                tool_call_arguments='{"query":"docs"}',
+            )
+            yield StreamEvent(type="finish", finish_reason="tool_calls")
+            yield StreamEvent(
+                type="usage",
+                usage=Usage(prompt_tokens=5, completion_tokens=12, total_tokens=17),
+            )
+            return
+
+        tool_turn = next(msg for msg in messages if msg.role == "assistant" and msg.tool_calls)
+        assert tool_turn.reasoning_content == "Need source lookup."
+        yield StreamEvent(type="text_delta", text="final answer")
+        yield StreamEvent(type="finish", finish_reason="stop")
+        yield StreamEvent(
+            type="usage",
+            usage=Usage(prompt_tokens=5, completion_tokens=3, total_tokens=8),
+        )
+
+
+@pytest.mark.asyncio
+async def test_agent_round_trips_reasoning_content_after_streamed_tool_call():
+    provider = _ReasoningToolProvider()
+    agent = Agent(
+        config=CalciferConfig(api_key="mock", base_url="mock", model="mock"),
+        provider=provider,
+        tools=[lookup_tool],
+    )
+
+    result = None
+    async for event in agent.run_stream("find docs"):
+        if event.type == "run_complete":
+            result = event.result
+
+    assert result is not None
+    assert result.final_text == "final answer"
+    assert len(provider.calls) == 2

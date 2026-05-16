@@ -160,6 +160,7 @@ class LLMProvider:
         """
         text_parts: list[str] = []
         stream_tool_calls: dict[int, dict[str, str]] = {}
+        reasoning_parts: list[str] = []
         stream_usage: Usage | None = None
         finish_reason: str | None = None
         async for event in self.chat_completion_stream(
@@ -170,6 +171,8 @@ class LLMProvider:
         ):
             if event.type == "text_delta" and event.text:
                 text_parts.append(event.text)
+            elif event.type == "thinking_delta" and event.thinking:
+                reasoning_parts.append(event.thinking)
             elif event.type == "tool_call_delta":
                 idx = event.tool_call_index or 0
                 acc = stream_tool_calls.setdefault(
@@ -199,6 +202,7 @@ class LLMProvider:
             role="assistant",
             content="".join(text_parts) or None,
             tool_calls=recovered_calls,
+            reasoning_content="".join(reasoning_parts) or None,
         )
         if finish_reason == "length":
             msg.metadata["api_error"] = "max_output_tokens"
@@ -350,6 +354,7 @@ class LLMProvider:
             role="assistant",
             content=choice.get("content"),
             tool_calls=tool_calls,
+            reasoning_content=choice.get("reasoning_content"),
         )
 
         raw_usage = data.get("usage", {})
@@ -468,6 +473,11 @@ class LLMProvider:
                         # Thinking delta (extended thinking / chain of thought)
                         if delta.get("thinking"):
                             yield StreamEvent(type="thinking_delta", thinking=delta["thinking"])
+                        if delta.get("reasoning_content"):
+                            yield StreamEvent(
+                                type="thinking_delta",
+                                thinking=delta["reasoning_content"],
+                            )
 
                         # Tool call deltas
                         for tc_delta in delta.get("tool_calls") or []:

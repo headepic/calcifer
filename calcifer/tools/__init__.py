@@ -8,6 +8,7 @@ from .GlobTool import GlobTool
 from .GrepTool import GrepTool
 from .SkillTool import SkillTool
 from .ToolSearchTool import ToolSearchTool
+from .WebSearchTool import WebSearchTool
 
 __all__ = [
     "BashTool",
@@ -18,4 +19,5 @@ __all__ = [
     "GrepTool",
     "SkillTool",
     "ToolSearchTool",
+    "WebSearchTool",
 ]

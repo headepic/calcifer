@@ -111,9 +111,16 @@ async def execute_tool_call(
             tool_call_id=tc.id,
         )
 
+    progress_callback = None
+    if on_progress:
+        def progress_callback(progress: ToolProgress) -> None:
+            if not progress.tool_use_id:
+                progress.tool_use_id = tc.id
+            on_progress(progress)
+
     # 4. Execute
     try:
-        result = await tool.call(validated, context, on_progress=on_progress)
+        result = await tool.call(validated, context, on_progress=progress_callback)
     except asyncio.CancelledError:
         return Message(
             role="tool",
@@ -146,7 +153,8 @@ async def execute_tool_call(
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
     logger.debug("Tool %s completed in %dms", tool.name, elapsed_ms)
 
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = dict(result.metadata)
+    metadata["is_error"] = result.is_error
     if persisted_path:
         metadata["persisted_path"] = persisted_path
 
