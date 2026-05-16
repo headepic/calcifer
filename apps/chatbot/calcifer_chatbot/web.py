@@ -74,7 +74,7 @@ def render_index_html() -> str:
       grid-template-columns: minmax(0, 1fr);
     }
     .codex-workspace-grid.has-trace {
-      grid-template-columns: minmax(0, 1fr) 420px;
+      grid-template-columns: minmax(0, 1fr) clamp(420px, 34vw, 560px);
     }
     .topbar {
       min-height: 54px;
@@ -349,6 +349,68 @@ def render_index_html() -> str:
       font-size: 11px;
       line-height: 1.45;
     }
+    .structured-json,
+    .tool-group-json {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+      color: var(--muted-strong);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .structured-json-object,
+    .structured-json-array {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+    .json-field-row {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
+      gap: 8px;
+      padding: 6px 7px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.66);
+      border-radius: 7px;
+    }
+    .json-field-key {
+      min-width: 0;
+      color: var(--muted);
+      font-weight: 700;
+      overflow-wrap: break-word;
+    }
+    .json-field-value {
+      min-width: 0;
+      color: var(--muted-strong);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .json-field-value.is-nested {
+      display: grid;
+      gap: 5px;
+    }
+    .json-primitive[data-type="number"],
+    .json-primitive[data-type="boolean"] {
+      color: #0f625d;
+    }
+    .json-primitive[data-type="null"] {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .tool-group-json {
+      gap: 4px;
+    }
+    .tool-group-json .json-field-row {
+      grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
+      padding: 5px 7px;
+      background: rgba(255, 255, 255, 0.54);
+    }
+    .tool-group-json .json-field-key {
+      overflow-wrap: normal;
+      white-space: nowrap;
+    }
     .tool-group-card {
       margin-left: 12px;
       background: rgba(247, 247, 244, 0.72);
@@ -527,11 +589,21 @@ def render_index_html() -> str:
       padding: 10px 12px;
       color: var(--muted-strong);
       background: var(--surface-code);
-      white-space: pre-wrap;
       overflow-wrap: anywhere;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       font-size: 11px;
       line-height: 1.5;
+    }
+    .loop-detail-payload .json-field-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+    }
+    .loop-detail-payload .json-field-key {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+    .loop-detail-payload .json-field-value {
+      padding-left: 8px;
     }
     .message-list {
       width: min(900px, 100%);
@@ -661,7 +733,7 @@ def render_index_html() -> str:
     }
     .composer-zone {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 420px;
+      grid-template-columns: minmax(0, 1fr) clamp(420px, 34vw, 560px);
       border-top: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.96);
       padding: 12px 0 18px;
@@ -716,6 +788,7 @@ def render_index_html() -> str:
     }
     @media (max-width: 980px) {
       .codex-workspace-grid,
+      .codex-workspace-grid.has-trace,
       .composer-zone {
         grid-template-columns: 1fr;
       }
@@ -817,7 +890,7 @@ def render_index_html() -> str:
           <section id="agent-loop-events" class="agent-loop-events" aria-live="polite"></section>
           <section id="agent-loop-detail" class="loop-detail" hidden>
             <div id="agent-loop-detail-title" class="loop-detail-title">Payload</div>
-            <pre id="agent-loop-payload" class="loop-detail-payload">{}</pre>
+            <div id="agent-loop-payload" class="loop-detail-payload">{}</div>
           </section>
         </aside>
       </div>
@@ -978,6 +1051,125 @@ def render_index_html() -> str:
       return String(value);
     }
 
+    function isStructuredObject(value) {
+      return value && typeof value === "object";
+    }
+
+    function primitiveType(value) {
+      if (value === null) return "null";
+      if (Array.isArray(value)) return "array";
+      return typeof value;
+    }
+
+    function renderPrimitiveValue(value) {
+      const node = document.createElement("span");
+      node.className = "json-primitive";
+      node.dataset.type = primitiveType(value);
+      if (value === null) node.textContent = "null";
+      else if (value === undefined) node.textContent = "undefined";
+      else if (typeof value === "string") node.textContent = value;
+      else node.textContent = String(value);
+      return node;
+    }
+
+    function renderStructuredValue(value, options = {}) {
+      const parsed = parseMaybeJson(value);
+      const root = document.createElement("div");
+      root.className = "structured-json";
+      appendStructuredNode(root, parsed, {
+        depth: options.depth || 0,
+        maxDepth: options.maxDepth || 5,
+        maxItems: options.maxItems || 60,
+      });
+      return root;
+    }
+
+    function appendStructuredNode(container, value, options) {
+      const parsed = parseMaybeJson(value);
+      const depth = options.depth || 0;
+      const maxDepth = options.maxDepth || 5;
+      const maxItems = options.maxItems || 60;
+
+      if (!isStructuredObject(parsed)) {
+        container.appendChild(renderPrimitiveValue(parsed));
+        return;
+      }
+      if (depth >= maxDepth) {
+        container.appendChild(renderPrimitiveValue(previewValue(parsed, 180)));
+        return;
+      }
+
+      const entries = Array.isArray(parsed)
+        ? parsed.map((item, index) => [String(index), item])
+        : Object.entries(parsed);
+      const list = document.createElement("div");
+      list.className = Array.isArray(parsed) ? "structured-json-array" : "structured-json-object";
+      entries.slice(0, maxItems).forEach(([key, item]) => {
+        const row = document.createElement("div");
+        row.className = "json-field-row";
+        const keyNode = document.createElement("div");
+        keyNode.className = "json-field-key";
+        keyNode.textContent = key;
+        const valueNode = document.createElement("div");
+        valueNode.className = "json-field-value";
+        if (isStructuredObject(parseMaybeJson(item))) {
+          valueNode.classList.add("is-nested");
+          appendStructuredNode(valueNode, item, {...options, depth: depth + 1});
+        } else {
+          valueNode.appendChild(renderPrimitiveValue(item));
+        }
+        row.append(keyNode, valueNode);
+        list.appendChild(row);
+      });
+      if (entries.length > maxItems) {
+        const row = document.createElement("div");
+        row.className = "json-field-row";
+        const keyNode = document.createElement("div");
+        keyNode.className = "json-field-key";
+        keyNode.textContent = "more";
+        const valueNode = document.createElement("div");
+        valueNode.className = "json-field-value";
+        valueNode.textContent = `${entries.length - maxItems} more item${entries.length - maxItems === 1 ? "" : "s"}`;
+        row.append(keyNode, valueNode);
+        list.appendChild(row);
+      }
+      container.appendChild(list);
+    }
+
+    function compactJsonRows(value) {
+      const parsed = parseMaybeJson(value);
+      if (!parsed || typeof parsed !== "object") return {};
+      if (Array.isArray(parsed)) return {items: `${parsed.length} item${parsed.length === 1 ? "" : "s"}`};
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .filter(([, item]) => item !== undefined && item !== null && item !== "")
+          .slice(0, 6)
+          .map(([key, item]) => [key, isStructuredObject(parseMaybeJson(item)) ? previewValue(item, 120) : item])
+      );
+    }
+
+    function appendJsonFieldRows(container, value) {
+      const rows = compactJsonRows(value);
+      const entries = Object.entries(rows);
+      if (!entries.length) return null;
+      const list = document.createElement("div");
+      list.className = "tool-group-json";
+      for (const [key, item] of entries) {
+        const row = document.createElement("div");
+        row.className = "json-field-row";
+        const keyNode = document.createElement("div");
+        keyNode.className = "json-field-key";
+        keyNode.textContent = key;
+        const valueNode = document.createElement("div");
+        valueNode.className = "json-field-value";
+        valueNode.textContent = previewValue(item, 180);
+        row.append(keyNode, valueNode);
+        list.appendChild(row);
+      }
+      container.appendChild(list);
+      return list;
+    }
+
     function previewValue(value, limit = 240) {
       const text = formatStructuredValue(value).trim();
       if (!text) return "";
@@ -1054,7 +1246,7 @@ def render_index_html() -> str:
       agentLoopDetail.className = "loop-detail";
       loopDetailTitle.textContent = node.title || "Payload";
       const payload = node.raw || node.payload || node.detail || node;
-      loopDetailPayload.textContent = JSON.stringify(payload, null, 2);
+      loopDetailPayload.replaceChildren(renderStructuredValue(payload));
     }
 
     function updateTraceTabs() {
@@ -1492,6 +1684,12 @@ def render_index_html() -> str:
         preview.textContent = group.preview;
         item.append(preview);
       }
+      const rowPayload = {
+        ...(group.call?.detail?.arguments || {}),
+        ...(group.resultCount ? {result_count: group.resultCount} : {}),
+        ...(group.resultPayload?.duration_seconds ? {duration_seconds: group.resultPayload.duration_seconds} : {}),
+      };
+      appendJsonFieldRows(item, rowPayload);
       item.addEventListener("click", () => selectTraceNode(group, item));
       item.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {

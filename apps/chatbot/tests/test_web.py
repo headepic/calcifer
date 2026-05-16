@@ -146,6 +146,7 @@ def test_index_html_contains_chat_surface():
     assert 'assistantTrace.push(payload);' in html
     assert 'workspaceGrid.classList.add("has-trace");' in html
     assert 'workspaceGrid.classList.remove("has-trace");' in html
+    assert ".codex-workspace-grid.has-trace," in html
     assert 'id="overview-tab"' in html
     assert 'id="steps-tab"' in html
     assert 'id="sources-tab"' in html
@@ -163,6 +164,15 @@ def test_index_html_contains_chat_surface():
     assert 'function renderInspector(model)' in html
     assert 'function renderInspectorDetail(node)' in html
     assert 'function formatStructuredValue(value)' in html
+    assert 'function renderStructuredValue(value, options = {})' in html
+    assert 'function appendJsonFieldRows(container, value)' in html
+    assert 'className = "structured-json"' in html
+    assert 'className = "json-field-row"' in html
+    assert 'className = "tool-group-json"' in html
+    assert '.loop-detail-payload .json-field-row {' in html
+    assert '.tool-group-json .json-field-row {' in html
+    assert 'grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);' in html
+    assert 'grid-template-columns: minmax(0, 1fr);' in html
     assert 'className = "trace-capsule"' in html
     assert 'className = "run-summary-card"' in html
     assert 'className = "trace-step"' in html
@@ -185,7 +195,8 @@ def test_index_html_contains_chat_surface():
     assert 'assistantView.node.addEventListener("click"' in html
     assert 'agentLoopDetail.hidden = true;' in html
     assert 'agentLoopDetail.hidden = false;' in html
-    assert 'JSON.stringify(payload, null, 2)' in html
+    assert 'loopDetailPayload.replaceChildren(renderStructuredValue(payload));' in html
+    assert 'JSON.stringify({summary: model.summary, trace: model.trace}, null, 2)' in html
     assert 'selectTraceNode(node, element)' in html
     assert 'Model request' in html
     assert 'Final answer' in html
