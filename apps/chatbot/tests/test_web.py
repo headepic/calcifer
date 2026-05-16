@@ -154,6 +154,7 @@ def test_index_html_contains_chat_surface():
     assert 'function buildInspectorModel(assistantView)' in html
     assert 'function renderInspector(model)' in html
     assert 'function renderInspectorDetail(node)' in html
+    assert 'function insertTimelineChildAfterRelatedEvents(children, child, toolCallId)' in html
     assert 'function formatStructuredValue(value)' in html
     assert 'className = "inspector-summary"' in html
     assert 'className = "timeline-node"' in html
@@ -172,6 +173,8 @@ def test_index_html_contains_chat_surface():
     assert 'Assistant delta' not in html
     assert 'if (payload.type === "assistant_delta") {' in html
     assert 'return;\n        }\n        assistantTrace.push(payload);' in html
+    assert 'splice(callIndex + 1, 0, child)' not in html
+    assert 'relatedKinds.has(item.kind)' in html
     assert 'className = "run-details"' not in html
     assert 'className = "run-summary"' not in html
     assert 'class="composer-card"' in html

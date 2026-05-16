@@ -694,6 +694,33 @@ def render_index_html() -> str:
       return parts.filter(Boolean).join(" · ");
     }
 
+    function insertTimelineChildAfterRelatedEvents(children, child, toolCallId) {
+      if (!toolCallId) {
+        children.push(child);
+        return;
+      }
+      const sameTool = (item) => {
+        const detailId = item?.detail?.tool_call_id;
+        const rawId = item?.raw?.tool_call_id;
+        return detailId === toolCallId || rawId === toolCallId;
+      };
+      const resultKinds = new Set(["tool_result", "tool_result_error"]);
+      if (child.kind === "tool_progress") {
+        const resultIndex = children.findIndex((item) => sameTool(item) && resultKinds.has(item.kind));
+        if (resultIndex >= 0) {
+          children.splice(resultIndex, 0, child);
+          return;
+        }
+      }
+      const relatedKinds = new Set(["tool_call", "tool_progress"]);
+      let insertIndex = -1;
+      children.forEach((item, index) => {
+        if (sameTool(item) && relatedKinds.has(item.kind)) insertIndex = index;
+      });
+      if (insertIndex >= 0) children.splice(insertIndex + 1, 0, child);
+      else children.push(child);
+    }
+
     function renderInspectorDetail(node) {
       if (!node) return;
       selectedInspectorNode = node;
@@ -891,7 +918,11 @@ def render_index_html() -> str:
             },
             raw: payload,
           };
-          progressTurn.children.push(child);
+          insertTimelineChildAfterRelatedEvents(
+            progressTurn.children,
+            child,
+            payload.tool_call_id,
+          );
           continue;
         }
         if (payload.stage === "tool_result") {
@@ -910,15 +941,11 @@ def render_index_html() -> str:
             },
             raw: payload,
           };
-          resultTurn.children.push(child);
-          if (pair?.call) {
-            const resultIndex = resultTurn.children.indexOf(child);
-            const callIndex = resultTurn.children.indexOf(pair.call);
-            if (callIndex >= 0 && resultIndex >= 0 && resultIndex !== callIndex + 1) {
-              resultTurn.children.splice(resultIndex, 1);
-              resultTurn.children.splice(callIndex + 1, 0, child);
-            }
-          }
+          insertTimelineChildAfterRelatedEvents(
+            resultTurn.children,
+            child,
+            payload.tool_call_id,
+          );
         }
       }
 
