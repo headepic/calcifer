@@ -20,7 +20,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
 
-def render_index_html(*, tool_mode: ToolMode = "web") -> str:
+def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     """Return the single-page chatbot UI."""
     document = """<!doctype html>
 <html lang="en">
@@ -3040,7 +3040,7 @@ class ChatbotWebApp:
     """Thread-safe facade used by the HTTP handler."""
 
     chatbot: Chatbot
-    tool_mode: ToolMode = "web"
+    tool_mode: ToolMode = "chatbot"
 
     def __post_init__(self) -> None:
         self._lock = threading.Lock()
@@ -3234,7 +3234,7 @@ def run_server(
     model: str | None = None,
     base_url: str | None = None,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-    tools: ToolMode = "web",
+    tools: ToolMode = "chatbot",
     open_browser: bool = True,
 ) -> ThreadingHTTPServer:
     """Create and run the local chatbot web server."""
@@ -3268,8 +3268,8 @@ def main() -> None:
     parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
     parser.add_argument(
         "--tools",
-        choices=["none", "web", "workspace", "readonly", "all"],
-        default="web",
+        choices=["none", "chatbot", "web", "workspace", "readonly", "all"],
+        default="chatbot",
     )
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser window.")
     args = parser.parse_args()

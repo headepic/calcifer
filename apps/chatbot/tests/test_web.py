@@ -318,7 +318,8 @@ def test_index_html_contains_chat_surface():
     assert 'fetch("/api/chat/stream"' in html
     assert 'white-space: normal;' in html
     assert 'flex: 0 0 auto;' in html
-    assert '<span class="status-pill">web</span>' in html
+    assert '<span class="status-pill">chatbot</span>' in html
+    assert '<span class="status-pill">web</span>' not in html
     assert '<span class="status-pill">readonly</span>' not in html
     assert 'class="status-pill metric-pill"' in html
     assert '.metric-pill {' in html
@@ -329,7 +330,7 @@ def test_index_html_can_show_selected_tool_mode():
     html = render_index_html(tool_mode="workspace")
 
     assert '<span class="status-pill">workspace</span>' in html
-    assert '<span class="status-pill">web</span>' not in html
+    assert '<span class="status-pill">chatbot</span>' not in html
 
 
 def test_web_app_chat_updates_conversation():

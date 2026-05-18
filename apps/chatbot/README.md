@@ -5,8 +5,9 @@ Browser-based chatbot consumer built on the Calcifer SDK.
 It keeps the application layer deliberately thin:
 
 - `Chatbot` wraps `calcifer.Agent` and preserves conversation state.
-- `select_tools()` exposes `none`, `web`, `workspace`, `readonly`, and `all`
-  tool modes. The default `web` mode only enables built-in `web_search`.
+- `select_tools()` exposes `none`, `chatbot`, `web`, `workspace`, `readonly`,
+  and `all` tool modes. The default `chatbot` mode only enables built-in
+  `web_search`; `web` remains a compatibility alias for `chatbot`.
   `workspace` includes local read/search tools plus `web_search`; `readonly`
   remains a compatibility alias for `workspace`.
 - A local standard-library web server renders the chat page.
@@ -54,7 +55,7 @@ Useful options:
 
 ```bash
 calcifer-chatbot --tools none
-calcifer-chatbot --tools web
+calcifer-chatbot --tools chatbot
 calcifer-chatbot --tools workspace
 calcifer-chatbot --tools all
 calcifer-chatbot --port 8766

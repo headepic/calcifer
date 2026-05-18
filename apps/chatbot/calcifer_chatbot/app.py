@@ -20,7 +20,7 @@ Use tools only when they materially improve the answer. Cite web sources when
 you use web search. If workspace tools are enabled and you use local files, cite
 the relevant paths in your response."""
 
-ToolMode = Literal["none", "web", "workspace", "readonly", "all"]
+ToolMode = Literal["none", "chatbot", "web", "workspace", "readonly", "all"]
 ProviderMode = Literal["deepseek", "openai"]
 WEB_TOOL_NAMES = {"web_search"}
 WORKSPACE_TOOL_NAMES = {"file_read", "glob", "grep", "web_search"}
@@ -74,12 +74,12 @@ def resolve_provider_config(
     raise ValueError(f"Unknown provider: {provider}")
 
 
-def select_tools(mode: ToolMode = "web") -> list[Tool]:
+def select_tools(mode: ToolMode = "chatbot") -> list[Tool]:
     """Return the built-in tool set for a chatbot mode."""
     if mode == "none":
         return []
     tools = get_all_builtin_tools()
-    if mode == "web":
+    if mode in {"chatbot", "web"}:
         return [tool for tool in tools if tool.name in WEB_TOOL_NAMES]
     if mode in {"workspace", "readonly"}:
         return [tool for tool in tools if tool.name in WORKSPACE_TOOL_NAMES]
@@ -135,7 +135,7 @@ def build_chatbot(
     base_url: str | None = None,
     model: str | None = None,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-    tools: ToolMode = "web",
+    tools: ToolMode = "chatbot",
 ) -> Chatbot:
     """Build a Chatbot from environment-compatible configuration."""
     provider_config = resolve_provider_config(
