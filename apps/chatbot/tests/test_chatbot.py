@@ -90,10 +90,9 @@ def test_select_tools_workspace_mode_excludes_mutating_tools():
     assert "bash" not in names
 
 
-def test_select_tools_readonly_mode_is_workspace_alias():
-    assert {tool.name for tool in select_tools("readonly")} == {
-        tool.name for tool in select_tools("workspace")
-    }
+def test_select_tools_rejects_removed_readonly_mode():
+    with pytest.raises(ValueError, match="Unknown tool mode"):
+        select_tools("readonly")  # type: ignore[arg-type]
 
 
 def test_build_chatbot_default_chatbot_tools_are_web_search_only(monkeypatch):
@@ -137,6 +136,11 @@ def test_build_system_prompt_appends_rules_to_custom_prompt():
     assert prompt.startswith("You are Calcifer.")
     assert "local workspace" in prompt
     assert "cite file paths" in prompt
+
+
+def test_build_system_prompt_rejects_removed_readonly_mode():
+    with pytest.raises(ValueError, match="Unknown tool mode"):
+        build_system_prompt("readonly")  # type: ignore[arg-type]
 
 
 def test_package_exports_build_system_prompt():

@@ -17,7 +17,7 @@ from calcifer.tool_registry import get_all_builtin_tools
 
 DEFAULT_SYSTEM_PROMPT = "You are a concise, helpful chatbot powered by Calcifer."
 
-ToolMode = Literal["none", "chatbot", "workspace", "readonly", "all"]
+ToolMode = Literal["none", "chatbot", "workspace", "all"]
 ProviderMode = Literal["deepseek", "openai"]
 WEB_TOOL_NAMES = {"web_search"}
 WORKSPACE_TOOL_NAMES = {"file_read", "glob", "grep", "web_search"}
@@ -94,17 +94,10 @@ def resolve_provider_config(
     raise ValueError(f"Unknown provider: {provider}")
 
 
-def _prompt_mode(mode: ToolMode) -> str:
-    if mode == "readonly":
-        return "workspace"
-    return mode
-
-
 def build_system_prompt(mode: ToolMode = "chatbot", *, base_prompt: str | None = None) -> str:
     """Build the system prompt from the selected chatbot mode."""
-    prompt_mode = _prompt_mode(mode)
     try:
-        mode_rules = MODE_PROMPT_RULES[prompt_mode]
+        mode_rules = MODE_PROMPT_RULES[mode]
     except KeyError as exc:
         raise ValueError(f"Unknown tool mode: {mode}") from exc
     base = (base_prompt or DEFAULT_SYSTEM_PROMPT).strip()
@@ -118,7 +111,7 @@ def select_tools(mode: ToolMode = "chatbot") -> list[Tool]:
     tools = get_all_builtin_tools()
     if mode == "chatbot":
         return [tool for tool in tools if tool.name in WEB_TOOL_NAMES]
-    if mode in {"workspace", "readonly"}:
+    if mode == "workspace":
         return [tool for tool in tools if tool.name in WORKSPACE_TOOL_NAMES]
     if mode == "all":
         return tools

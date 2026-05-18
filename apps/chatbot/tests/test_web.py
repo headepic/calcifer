@@ -30,6 +30,20 @@ def _make_web_app(responses: list[str]) -> ChatbotWebApp:
     return ChatbotWebApp(Chatbot(agent=agent))
 
 
+def _make_mode_bot(mode: str) -> Chatbot:
+    provider = MockProvider(responses=[f"{mode} answer"])
+    agent = Agent(
+        config=CalciferConfig(
+            api_key="mock",
+            base_url="mock",
+            model="mock",
+            system_prompt=f"mode:{mode}",
+        ),
+        provider=provider,
+    )
+    return Chatbot(agent=agent)
+
+
 class LoopStickyProvider:
     """Provider double that fails if requests hop between event loops."""
 
@@ -204,7 +218,12 @@ def test_index_html_contains_chat_surface():
     assert 'assistantView.node.addEventListener("click"' in html
     assert 'agentLoopDetail.hidden = true;' in html
     assert 'agentLoopDetail.hidden = false;' in html
-    assert 'loopDetailPayload.replaceChildren(renderStructuredValue(payload));' in html
+    assert 'loopDetailPayload.replaceChildren(renderStructuredValue(filtered));' in html
+    assert 'id="loop-detail-filter"' in html
+    assert 'id="copy-payload-button"' in html
+    assert 'function renderInspectorPayload(payload, filterText = "")' in html
+    assert 'function filterInspectorPayload(value, query)' in html
+    assert 'function copyInspectorPayload()' in html
     assert 'JSON.stringify({summary: model.summary, trace: model.trace}, null, 2)' in html
     assert 'selectTraceNode(node, element)' in html
     assert 'Input' in html
@@ -320,9 +339,16 @@ def test_index_html_contains_chat_surface():
     assert 'fetch("/api/chat/stream"' in html
     assert 'white-space: normal;' in html
     assert 'flex: 0 0 auto;' in html
-    assert '<span class="status-pill">chatbot</span>' in html
+    assert '<span id="tool-mode-pill" class="status-pill">chatbot</span>' in html
     assert '<span class="status-pill">web</span>' not in html
     assert '<span class="status-pill">readonly</span>' not in html
+    assert 'id="mode-switcher"' in html
+    assert 'data-mode-option="chatbot"' in html
+    assert 'data-mode-option="workspace"' in html
+    assert 'data-mode-option="all"' in html
+    assert 'fetch("/api/mode"' in html
+    assert 'function setActiveMode(mode)' in html
+    assert 'function clearConversationView()' in html
     assert 'class="status-pill metric-pill"' in html
     assert '.metric-pill {' in html
     assert "data-role" in html
@@ -331,15 +357,46 @@ def test_index_html_contains_chat_surface():
 def test_index_html_can_show_selected_tool_mode():
     html = render_index_html(tool_mode="workspace")
 
-    assert '<span class="status-pill">workspace</span>' in html
+    assert '<span id="tool-mode-pill" class="status-pill">workspace</span>' in html
     assert '<span class="status-pill">chatbot</span>' not in html
 
 
 def test_cli_tool_mode_choices_expose_chatbot_not_web():
     source = inspect.getsource(web_module.main)
 
-    assert 'choices=["none", "chatbot", "workspace", "readonly", "all"]' in source
+    assert 'choices=["none", "chatbot", "workspace", "all"]' in source
     assert '"web"' not in source
+    assert '"readonly"' not in source
+
+
+def test_web_app_set_mode_rebuilds_chatbot_and_resets_conversation():
+    created_modes: list[str] = []
+
+    def factory(mode: str) -> Chatbot:
+        created_modes.append(mode)
+        return _make_mode_bot(mode)
+
+    app = ChatbotWebApp(factory("chatbot"), tool_mode="chatbot", chatbot_factory=factory)
+    app.chat("hello")
+
+    payload = app.set_mode("workspace")
+
+    assert payload == {"ok": True, "mode": "workspace"}
+    assert created_modes == ["chatbot", "workspace"]
+    assert app.tool_mode == "workspace"
+    assert app.chatbot.conversation == []
+    assert app.chatbot.agent._config.system_prompt == "mode:workspace"
+
+
+def test_web_app_rejects_unknown_mode():
+    app = ChatbotWebApp(_make_mode_bot("chatbot"))
+
+    try:
+        app.set_mode("readonly")
+    except ValueError as exc:
+        assert "Unknown tool mode" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError")
 
 
 def test_web_app_chat_updates_conversation():

@@ -18,6 +18,7 @@ from .app import DEFAULT_SYSTEM_PROMPT, Chatbot, ProviderMode, ToolMode, build_c
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+SWITCHABLE_TOOL_MODES: tuple[ToolMode, ...] = ("chatbot", "workspace", "all")
 
 
 def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
@@ -139,6 +140,37 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       background: var(--surface);
       color: var(--muted-strong);
       border-radius: 7px;
+    }
+    .mode-switcher {
+      flex: 0 0 auto;
+      display: inline-grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 2px;
+      min-height: 28px;
+      padding: 2px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      border-radius: 7px;
+    }
+    .mode-button {
+      min-width: 72px;
+      min-height: 22px;
+      padding: 3px 8px;
+      border: 0;
+      background: transparent;
+      color: var(--muted-strong);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .mode-button.is-active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 0 rgba(31, 31, 29, 0.06);
+    }
+    .mode-button:disabled {
+      cursor: wait;
+      opacity: 0.62;
     }
     .status-dot {
       width: 7px;
@@ -843,15 +875,48 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     .loop-detail[hidden] {
       display: none;
     }
-    .loop-detail-title {
-      min-height: 34px;
-      display: flex;
+    .loop-detail-head {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
       align-items: center;
-      padding: 8px 12px;
+      min-height: 38px;
+      padding: 7px 12px;
       border-bottom: 1px solid var(--line);
+    }
+    .loop-detail-title {
+      min-width: 0;
       color: var(--ink);
       font-size: 12px;
       font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .loop-detail-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .loop-detail-filter {
+      width: 150px;
+      min-height: 26px;
+      padding: 4px 7px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 7px;
+      font-size: 12px;
+    }
+    .copy-payload-button {
+      min-height: 26px;
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted-strong);
+      cursor: pointer;
+      font-size: 12px;
     }
     .loop-detail-payload {
       margin: 0;
@@ -1133,7 +1198,12 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         </div>
         <div class="run-strip">
           <span class="status-pill">deepseek-v4-flash</span>
-          <span class="status-pill">__TOOL_MODE__</span>
+          <div id="mode-switcher" class="mode-switcher" role="group" aria-label="Tool mode">
+            <button class="mode-button" type="button" data-mode-option="chatbot">chatbot</button>
+            <button class="mode-button" type="button" data-mode-option="workspace">workspace</button>
+            <button class="mode-button" type="button" data-mode-option="all">all</button>
+          </div>
+          <span id="tool-mode-pill" class="status-pill">__TOOL_MODE__</span>
           <span class="status-pill"><span class="status-dot"></span><span id="status">Ready</span></span>
           <span class="status-pill metric-pill"><span id="turn-count">0</span> turns</span>
           <span class="status-pill metric-pill"><span id="token-count">0</span> tokens</span>
@@ -1160,7 +1230,13 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
           </div>
           <section id="agent-loop-events" class="agent-loop-events" aria-live="polite"></section>
           <section id="agent-loop-detail" class="loop-detail" hidden>
-            <div id="agent-loop-detail-title" class="loop-detail-title">Payload</div>
+            <div class="loop-detail-head">
+              <div id="agent-loop-detail-title" class="loop-detail-title">Payload</div>
+              <div class="loop-detail-actions">
+                <input id="loop-detail-filter" class="loop-detail-filter" type="search" placeholder="Filter fields" autocomplete="off">
+                <button id="copy-payload-button" class="copy-payload-button" type="button">Copy</button>
+              </div>
+            </div>
             <div id="agent-loop-payload" class="loop-detail-payload">{}</div>
           </section>
         </aside>
@@ -1185,19 +1261,25 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     const agentLoopDetail = document.getElementById("agent-loop-detail");
     const loopDetailTitle = document.getElementById("agent-loop-detail-title");
     const loopDetailPayload = document.getElementById("agent-loop-payload");
+    const loopDetailFilter = document.getElementById("loop-detail-filter");
+    const copyPayloadButton = document.getElementById("copy-payload-button");
     const loopStatus = document.getElementById("loop-status");
     const status = document.getElementById("status");
     const sendButton = document.getElementById("send-button");
     const resetButton = document.getElementById("reset-button");
     const closeTraceButton = document.getElementById("close-trace-button");
     const stopButton = document.getElementById("stop-button");
+    const toolModePill = document.getElementById("tool-mode-pill");
+    const modeButtons = Array.from(document.querySelectorAll("[data-mode-option]"));
     const turnCount = document.getElementById("turn-count");
     const tokenCount = document.getElementById("token-count");
     const traceTabs = Array.from(document.querySelectorAll("[data-trace-tab]"));
     let currentAbortController = null;
     let activeAssistantView = null;
     let selectedInspectorNode = null;
+    let selectedInspectorPayload = null;
     let activeTraceTab = "overview";
+    let activeMode = "__TOOL_MODE__";
 
     function scrollToBottom() {
       threadWrap.scrollTop = threadWrap.scrollHeight;
@@ -1205,6 +1287,25 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
     function timeLabel() {
       return new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+    }
+
+    function setActiveMode(mode) {
+      activeMode = mode;
+      if (toolModePill) toolModePill.textContent = mode;
+      modeButtons.forEach((button) => {
+        const isActive = button.dataset.modeOption === mode;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function clearConversationView() {
+      messages.innerHTML = "";
+      hideAssistantTrace();
+      turnCount.textContent = "0";
+      tokenCount.textContent = "0";
+      status.textContent = "Ready";
+      loopStatus.textContent = "Idle";
     }
 
     function appendMessage(role, text) {
@@ -1537,6 +1638,35 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       return payload.results.map((item) => sourceFromResult(item, payload.query || query || "", callId));
     }
 
+    function filterInspectorPayload(value, query) {
+      const needle = String(query || "").trim().toLowerCase();
+      if (!needle) return value;
+      const parsed = parseMaybeJson(value);
+      if (!isStructuredObject(parsed)) {
+        return String(parsed).toLowerCase().includes(needle) ? parsed : "";
+      }
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => filterInspectorPayload(item, needle))
+          .filter((item) => item !== "" && item !== undefined && item !== null && !(Array.isArray(item) && item.length === 0));
+      }
+      const filtered = {};
+      for (const [key, item] of Object.entries(parsed)) {
+        const keyMatches = key.toLowerCase().includes(needle);
+        const itemText = isStructuredObject(parseMaybeJson(item)) ? "" : String(item).toLowerCase();
+        const child = filterInspectorPayload(item, needle);
+        const hasChild = child !== "" && child !== undefined && child !== null && !(Array.isArray(child) && child.length === 0)
+          && !(typeof child === "object" && !Array.isArray(child) && Object.keys(child).length === 0);
+        if (keyMatches || itemText.includes(needle) || hasChild) filtered[key] = keyMatches ? item : child;
+      }
+      return filtered;
+    }
+
+    function renderInspectorPayload(payload, filterText = "") {
+      const filtered = filterInspectorPayload(payload, filterText);
+      loopDetailPayload.replaceChildren(renderStructuredValue(filtered));
+    }
+
     function renderInspectorDetail(node) {
       if (!node) return;
       selectedInspectorNode = node;
@@ -1544,7 +1674,21 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       agentLoopDetail.className = "loop-detail";
       loopDetailTitle.textContent = node.title || "Payload";
       const payload = node.raw || node.payload || node.detail || node;
-      loopDetailPayload.replaceChildren(renderStructuredValue(payload));
+      selectedInspectorPayload = payload;
+      if (loopDetailFilter) loopDetailFilter.value = "";
+      if (copyPayloadButton) copyPayloadButton.textContent = "Copy";
+      renderInspectorPayload(payload);
+    }
+
+    async function copyInspectorPayload() {
+      if (!selectedInspectorPayload) return;
+      const text = JSON.stringify(selectedInspectorPayload, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        copyPayloadButton.textContent = "Copied";
+      } catch {
+        copyPayloadButton.textContent = "Copy failed";
+      }
     }
 
     function updateTraceTabs() {
@@ -1565,6 +1709,9 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       updateTraceTabs();
       activeAssistantView = null;
       selectedInspectorNode = null;
+      selectedInspectorPayload = null;
+      if (loopDetailFilter) loopDetailFilter.value = "";
+      if (copyPayloadButton) copyPayloadButton.textContent = "Copy";
     }
 
     function buildRunSummary(assistantView) {
@@ -2814,12 +2961,34 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
     resetButton.addEventListener("click", async () => {
       await fetch("/api/reset", {method: "POST"});
-      messages.innerHTML = "";
-      hideAssistantTrace();
-      turnCount.textContent = "0";
-      tokenCount.textContent = "0";
-      status.textContent = "Ready";
+      clearConversationView();
       input.focus();
+    });
+
+    modeButtons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        const nextMode = button.dataset.modeOption;
+        if (!nextMode || nextMode === activeMode || currentAbortController) return;
+        modeButtons.forEach((modeButton) => { modeButton.disabled = true; });
+        status.textContent = "Switching";
+        try {
+          const response = await fetch("/api/mode", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({mode: nextMode}),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "Mode switch failed");
+          setActiveMode(payload.mode || nextMode);
+          clearConversationView();
+        } catch (error) {
+          status.textContent = "Error";
+          appendMessage("error", error.message || "Mode switch failed");
+        } finally {
+          modeButtons.forEach((modeButton) => { modeButton.disabled = false; });
+          input.focus();
+        }
+      });
     });
 
     stopButton.addEventListener("click", async () => {
@@ -2838,11 +3007,20 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       });
     });
 
+    loopDetailFilter.addEventListener("input", () => {
+      if (selectedInspectorPayload) renderInspectorPayload(selectedInspectorPayload, loopDetailFilter.value);
+    });
+
+    copyPayloadButton.addEventListener("click", () => {
+      copyInspectorPayload();
+    });
+
     closeTraceButton.addEventListener("click", () => {
       hideAssistantTrace();
       input.focus();
     });
 
+    setActiveMode(activeMode);
     input.focus();
   </script>
 </body>
@@ -3041,6 +3219,7 @@ class ChatbotWebApp:
 
     chatbot: Chatbot
     tool_mode: ToolMode = "chatbot"
+    chatbot_factory: Callable[[ToolMode], Chatbot] | None = None
 
     def __post_init__(self) -> None:
         self._lock = threading.Lock()
@@ -3133,6 +3312,20 @@ class ChatbotWebApp:
             self.chatbot.reset()
         return {"ok": True}
 
+    def set_mode(self, mode: str) -> dict[str, str | bool]:
+        if mode not in SWITCHABLE_TOOL_MODES:
+            raise ValueError(f"Unknown tool mode: {mode}")
+        with self._lock:
+            if mode != self.tool_mode:
+                if self.chatbot_factory is None:
+                    raise ValueError("Mode switching is not configured")
+                self.chatbot = self.chatbot_factory(mode)  # type: ignore[arg-type]
+                self.tool_mode = mode  # type: ignore[assignment]
+                self._run_counter = 0
+            else:
+                self.chatbot.reset()
+        return {"ok": True, "mode": self.tool_mode}
+
 
 def _handler_for(app: ChatbotWebApp) -> type[BaseHTTPRequestHandler]:
     class ChatbotRequestHandler(BaseHTTPRequestHandler):
@@ -3195,6 +3388,13 @@ def _handler_for(app: ChatbotWebApp) -> type[BaseHTTPRequestHandler]:
             if self.path == "/api/cancel":
                 self._send_json(HTTPStatus.OK, app.cancel())
                 return
+            if self.path == "/api/mode":
+                try:
+                    payload = self._read_json()
+                    self._send_json(HTTPStatus.OK, app.set_mode(str(payload.get("mode", ""))))
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
             if self.path not in {"/api/chat", "/api/chat/stream"}:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return
@@ -3238,14 +3438,17 @@ def run_server(
     open_browser: bool = True,
 ) -> ThreadingHTTPServer:
     """Create and run the local chatbot web server."""
-    chatbot = build_chatbot(
-        provider=provider,
-        model=model,
-        base_url=base_url,
-        system_prompt=system_prompt,
-        tools=tools,
-    )
-    app = ChatbotWebApp(chatbot, tool_mode=tools)
+    def make_chatbot(tool_mode: ToolMode) -> Chatbot:
+        return build_chatbot(
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            system_prompt=system_prompt,
+            tools=tool_mode,
+        )
+
+    chatbot = make_chatbot(tools)
+    app = ChatbotWebApp(chatbot, tool_mode=tools, chatbot_factory=make_chatbot)
     server = ThreadingHTTPServer((host, port), _handler_for(app))
     url = f"http://{host}:{server.server_port}"
     print(f"Calcifer Chatbot web UI: {url}")
@@ -3268,7 +3471,7 @@ def main() -> None:
     parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
     parser.add_argument(
         "--tools",
-        choices=["none", "chatbot", "workspace", "readonly", "all"],
+        choices=["none", "chatbot", "workspace", "all"],
         default="chatbot",
     )
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser window.")

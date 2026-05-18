@@ -5,11 +5,10 @@ Browser-based chatbot consumer built on the Calcifer SDK.
 It keeps the application layer deliberately thin:
 
 - `Chatbot` wraps `calcifer.Agent` and preserves conversation state.
-- `select_tools()` exposes `none`, `chatbot`, `workspace`, `readonly`, and
-  `all` tool modes. Each mode builds its own system prompt rules. The default
-  `chatbot` mode only enables built-in `web_search`. `workspace` includes local
-  read/search tools plus `web_search`; `readonly` remains a compatibility alias
-  for `workspace`.
+- `select_tools()` exposes `none`, `chatbot`, `workspace`, and `all` tool
+  modes. Each mode builds its own system prompt rules. The default `chatbot`
+  mode only enables built-in `web_search`. `workspace` includes local read/search
+  tools plus `web_search`.
 - A local standard-library web server renders the chat page.
 - Each assistant answer keeps its own run details. Click the answer or its
   trace capsule to inspect that specific run.
