@@ -59,14 +59,35 @@ async def test_chatbot_stream_updates_conversation():
     assert bot.conversation[-1].content == "streamed answer"
 
 
-def test_select_tools_readonly_mode_excludes_mutating_tools():
-    tools = select_tools("readonly")
+def test_select_tools_default_mode_uses_web_search_only():
+    tools = select_tools()
+    names = {tool.name for tool in tools}
+
+    assert names == {"web_search"}
+
+
+def test_select_tools_workspace_mode_excludes_mutating_tools():
+    tools = select_tools("workspace")
     names = {tool.name for tool in tools}
 
     assert {"file_read", "glob", "grep", "web_search"} <= names
     assert "file_write" not in names
     assert "file_edit" not in names
     assert "bash" not in names
+
+
+def test_select_tools_readonly_mode_is_workspace_alias():
+    assert {tool.name for tool in select_tools("readonly")} == {
+        tool.name for tool in select_tools("workspace")
+    }
+
+
+def test_build_chatbot_default_tools_are_web_search_only(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-test-key")
+
+    bot = build_chatbot(provider="deepseek")
+
+    assert {tool.name for tool in bot.agent._tools} == {"web_search"}
 
 
 def test_resolve_provider_config_uses_deepseek_env(monkeypatch):

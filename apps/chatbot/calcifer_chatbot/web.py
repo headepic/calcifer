@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import html
 import json
 import threading
 import webbrowser
@@ -19,9 +20,9 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
 
-def render_index_html() -> str:
+def render_index_html(*, tool_mode: ToolMode = "web") -> str:
     """Return the single-page chatbot UI."""
-    return """<!doctype html>
+    document = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -1132,7 +1133,7 @@ def render_index_html() -> str:
         </div>
         <div class="run-strip">
           <span class="status-pill">deepseek-v4-flash</span>
-          <span class="status-pill">readonly</span>
+          <span class="status-pill">__TOOL_MODE__</span>
           <span class="status-pill"><span class="status-dot"></span><span id="status">Ready</span></span>
           <span class="status-pill metric-pill"><span id="turn-count">0</span> turns</span>
           <span class="status-pill metric-pill"><span id="token-count">0</span> tokens</span>
@@ -2846,6 +2847,7 @@ def render_index_html() -> str:
   </script>
 </body>
 </html>"""
+    return document.replace("__TOOL_MODE__", html.escape(tool_mode))
 
 
 def _truncate(value: Any, limit: int = 1200) -> str:
@@ -3038,6 +3040,7 @@ class ChatbotWebApp:
     """Thread-safe facade used by the HTTP handler."""
 
     chatbot: Chatbot
+    tool_mode: ToolMode = "web"
 
     def __post_init__(self) -> None:
         self._lock = threading.Lock()
@@ -3176,7 +3179,7 @@ def _handler_for(app: ChatbotWebApp) -> type[BaseHTTPRequestHandler]:
             if self.path == "/" or self.path == "/index.html":
                 self._send_bytes(
                     HTTPStatus.OK,
-                    render_index_html().encode("utf-8"),
+                    render_index_html(tool_mode=app.tool_mode).encode("utf-8"),
                     "text/html; charset=utf-8",
                 )
                 return
@@ -3231,7 +3234,7 @@ def run_server(
     model: str | None = None,
     base_url: str | None = None,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-    tools: ToolMode = "readonly",
+    tools: ToolMode = "web",
     open_browser: bool = True,
 ) -> ThreadingHTTPServer:
     """Create and run the local chatbot web server."""
@@ -3242,7 +3245,7 @@ def run_server(
         system_prompt=system_prompt,
         tools=tools,
     )
-    app = ChatbotWebApp(chatbot)
+    app = ChatbotWebApp(chatbot, tool_mode=tools)
     server = ThreadingHTTPServer((host, port), _handler_for(app))
     url = f"http://{host}:{server.server_port}"
     print(f"Calcifer Chatbot web UI: {url}")
@@ -3263,7 +3266,11 @@ def main() -> None:
     parser.add_argument("--model", default=None)
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
-    parser.add_argument("--tools", choices=["none", "readonly", "all"], default="readonly")
+    parser.add_argument(
+        "--tools",
+        choices=["none", "web", "workspace", "readonly", "all"],
+        default="web",
+    )
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser window.")
     args = parser.parse_args()
 

@@ -16,12 +16,14 @@ from calcifer.tool_registry import get_all_builtin_tools
 
 
 DEFAULT_SYSTEM_PROMPT = """You are a concise, helpful chatbot powered by Calcifer.
-Use tools only when they materially improve the answer. If you use local file
-tools, cite the relevant paths in your response."""
+Use tools only when they materially improve the answer. Cite web sources when
+you use web search. If workspace tools are enabled and you use local files, cite
+the relevant paths in your response."""
 
-ToolMode = Literal["none", "readonly", "all"]
+ToolMode = Literal["none", "web", "workspace", "readonly", "all"]
 ProviderMode = Literal["deepseek", "openai"]
-READONLY_TOOL_NAMES = {"file_read", "glob", "grep", "web_search"}
+WEB_TOOL_NAMES = {"web_search"}
+WORKSPACE_TOOL_NAMES = {"file_read", "glob", "grep", "web_search"}
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
 OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
@@ -72,13 +74,15 @@ def resolve_provider_config(
     raise ValueError(f"Unknown provider: {provider}")
 
 
-def select_tools(mode: ToolMode = "readonly") -> list[Tool]:
+def select_tools(mode: ToolMode = "web") -> list[Tool]:
     """Return the built-in tool set for a chatbot mode."""
     if mode == "none":
         return []
     tools = get_all_builtin_tools()
-    if mode == "readonly":
-        return [tool for tool in tools if tool.name in READONLY_TOOL_NAMES]
+    if mode == "web":
+        return [tool for tool in tools if tool.name in WEB_TOOL_NAMES]
+    if mode in {"workspace", "readonly"}:
+        return [tool for tool in tools if tool.name in WORKSPACE_TOOL_NAMES]
     if mode == "all":
         return tools
     raise ValueError(f"Unknown tool mode: {mode}")
@@ -131,7 +135,7 @@ def build_chatbot(
     base_url: str | None = None,
     model: str | None = None,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-    tools: ToolMode = "readonly",
+    tools: ToolMode = "web",
 ) -> Chatbot:
     """Build a Chatbot from environment-compatible configuration."""
     provider_config = resolve_provider_config(
