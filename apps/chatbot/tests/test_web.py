@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import shutil
+import subprocess
 import threading
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -205,6 +207,10 @@ def test_index_html_contains_chat_surface():
     assert '.message[data-role="assistant"].is-pending .message-content' in html
     assert 'function setAssistantPlaceholder(assistantView, text)' in html
     assert 'function clearAssistantPlaceholder(assistantView)' in html
+    assert 'function renderMarkdown(target, text)' in html
+    assert 'function appendInlineMarkdown(target, text)' in html
+    assert 'function setMessageContent(view, text)' in html
+    assert 'function renderAssistantSources(assistantView, sources)' in html
     assert 'function appendAssistantPathItem(assistantView, item)' in html
     assert 'function updateAssistantPathFromTrace(assistantView, payload)' in html
     assert 'setAssistantPlaceholder(assistantView, "Thinking...");' in html
@@ -216,7 +222,7 @@ def test_index_html_contains_chat_surface():
     assert 'Found ${resultCount} results' in html
     assert 'assistantView.preserveActivityPath = true;' in html
     assert 'No response returned.' in html
-    assert 'assistantView.node.addEventListener("click"' in html
+    assert 'assistantView.node.addEventListener("click"' not in html
     assert 'agentLoopDetail.hidden = true;' in html
     assert 'agentLoopDetail.hidden = false;' in html
     assert 'loopDetailPayload.replaceChildren(renderStructuredValue(filtered));' in html
@@ -232,6 +238,14 @@ def test_index_html_contains_chat_surface():
     assert 'agentLoopDetail.scrollIntoView({block: "start", behavior: "auto"});' in html
     assert 'scrollTracePanelToTop();' in html
     assert 'anchorInspectorDetail();' in html
+    assert 'if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView);' in html
+    assert 'if (activeAssistantView === assistantView) renderAssistantTrace(assistantView);' in html
+    assert 'renderAssistantSources(assistantView, model.sources);' in html
+    assert 'source.index = sources.length + 1;' in html
+    assert 'className = "source-card-index"' in html
+    assert 'className = "assistant-sources"' in html
+    assert 'className = "assistant-source-link"' in html
+    assert 'window.confirm("Switching modes starts a new chat. Continue?")' in html
     assert 'JSON.stringify({summary: model.summary, trace: model.trace}, null, 2)' in html
     assert 'selectTraceNode(node, element)' in html
     assert 'Input' in html
@@ -362,6 +376,24 @@ def test_index_html_contains_chat_surface():
     assert "data-role" in html
 
 
+def test_web_source_script_is_valid_javascript():
+    node = shutil.which("node")
+    if node is None:
+        raise AssertionError("node executable is required for web source syntax check")
+
+    source = inspect.getsource(web_module)
+    script = source.split("<script>\n", 1)[1].split("\n  </script>", 1)[0]
+    result = subprocess.run(
+        [node, "-e", "const fs=require('fs'); new Function(fs.readFileSync(0, 'utf8'));"],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_index_html_can_show_selected_tool_mode():
     html = render_index_html(tool_mode="workspace")
 
@@ -457,6 +489,45 @@ def test_web_app_reset_aborts_and_forces_agent_idle():
     assert app.chatbot.agent._query_guard.is_idle
 
 
+def test_index_requests_reset_backend_conversation_for_fresh_ui():
+    provider = MockProvider(responses=["alpha answer", "beta answer"])
+    agent = Agent(
+        config=CalciferConfig(
+            api_key="mock",
+            base_url="mock",
+            model="mock",
+            system_prompt="You are a browser chatbot.",
+        ),
+        provider=provider,
+    )
+    app = ChatbotWebApp(Chatbot(agent=agent))
+    app.chat("reload marker alpha")
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(app))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+
+    try:
+        for path in ("/", "/index.html"):
+            app.chatbot.conversation = [Message(role="user", content=f"stale {path}")]
+            connection.request("GET", path)
+            response = connection.getresponse()
+            response.read()
+            assert response.status == 200
+            assert app.chatbot.conversation == []
+
+        app.chat("reload marker beta")
+        second_call_messages = provider.calls[1]["messages"]
+        assert [m.content for m in second_call_messages if m.role == "user"] == [
+            "reload marker beta",
+        ]
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_web_app_stream_chat_emits_trace_and_completion():
     app = _make_web_app(["streamed web answer"])
     emitted = []
@@ -528,6 +599,21 @@ def test_web_app_stream_chat_emits_trace_and_completion():
     assert complete["summary"]["input"] == "hello"
     assert complete["summary"]["usage"]["total_tokens"] == 2
     assert complete["summary"]["finish_reason"] == "stop"
+
+
+def test_web_app_reset_restarts_stream_run_counter():
+    app = _make_web_app(["first answer", "second answer"])
+    first = []
+    second = []
+
+    app.stream_chat("first", first.append)
+    app.reset()
+    app.stream_chat("second", second.append)
+
+    assert first[0]["run_id"] == "run-1"
+    assert first[0]["label"] == "Run 1"
+    assert second[0]["run_id"] == "run-1"
+    assert second[0]["label"] == "Run 1"
 
 
 def test_web_app_stream_chat_reuses_one_event_loop_across_requests():

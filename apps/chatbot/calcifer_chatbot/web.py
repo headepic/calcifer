@@ -725,6 +725,15 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     .source-card {
       cursor: pointer;
     }
+    .source-card-index {
+      flex: 0 0 auto;
+      min-width: 24px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
     .source-card a {
       color: var(--accent);
       text-decoration: none;
@@ -965,12 +974,6 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       align-self: flex-start;
       width: min(82%, 760px);
     }
-    .message[data-role="assistant"].has-detail .message-content {
-      cursor: pointer;
-    }
-    .message[data-role="assistant"].has-detail .message-content:hover {
-      color: #0f625d;
-    }
     .message[data-role="assistant"].is-pending .message-content {
       color: var(--muted);
       font-style: italic;
@@ -1004,12 +1007,106 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       overflow-wrap: anywhere;
       font-size: 15px;
     }
+    .message[data-role="assistant"] .message-content {
+      white-space: normal;
+    }
+    .message-content p,
+    .message-content ul,
+    .message-content ol,
+    .message-content pre,
+    .message-content h1,
+    .message-content h2,
+    .message-content h3,
+    .message-content h4,
+    .message-content h5,
+    .message-content h6 {
+      margin: 0 0 10px;
+    }
+    .message-content > :last-child {
+      margin-bottom: 0;
+    }
+    .message-content h1,
+    .message-content h2,
+    .message-content h3,
+    .message-content h4,
+    .message-content h5,
+    .message-content h6 {
+      color: var(--ink);
+      line-height: 1.25;
+      font-size: 16px;
+      font-weight: 760;
+    }
+    .message-content ul,
+    .message-content ol {
+      padding-left: 22px;
+    }
+    .message-content li {
+      margin: 3px 0;
+    }
+    .message-content code {
+      padding: 1px 4px;
+      border-radius: 5px;
+      background: var(--surface-code);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+    .message-content pre {
+      overflow: auto;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-code);
+      border-radius: 8px;
+      white-space: pre;
+    }
+    .message-content pre code {
+      padding: 0;
+      background: transparent;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .message-content a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .message-content a:hover {
+      text-decoration: underline;
+    }
     .message-extras {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
       gap: 8px;
       padding-top: 4px;
+    }
+    .assistant-sources {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .assistant-source-link {
+      min-height: 26px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      max-width: 100%;
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.74);
+      color: var(--muted-strong);
+      border-radius: 999px;
+      text-decoration: none;
+      font-size: 12px;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .assistant-source-link:hover {
+      border-color: var(--line-strong);
+      color: var(--accent);
+      text-decoration: none;
     }
     .trace-capsule {
       min-height: 28px;
@@ -1308,6 +1405,196 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       loopStatus.textContent = "Idle";
     }
 
+    function appendPlainText(target, text) {
+      if (!text) return;
+      target.appendChild(document.createTextNode(text));
+    }
+
+    function safeLinkUrl(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      try {
+        const url = new URL(text, window.location.href);
+        return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+      } catch {
+        return "";
+      }
+    }
+
+    function appendInlineMarkdown(target, text) {
+      const source = String(text ?? "");
+      let cursor = 0;
+      const patterns = [
+        {type: "link", regex: /[[](.+?)][(]([^)]+)[)]/},
+        {type: "code", regex: /`([^`]+)`/},
+        {type: "bold", regex: /[*][*](.+?)[*][*]/},
+      ];
+
+      while (cursor < source.length) {
+        const remainder = source.slice(cursor);
+        let next = null;
+        for (const pattern of patterns) {
+          const match = pattern.regex.exec(remainder);
+          if (match && (!next || match.index < next.match.index)) {
+            next = {type: pattern.type, match};
+          }
+        }
+
+        if (!next) {
+          appendPlainText(target, remainder);
+          break;
+        }
+
+        if (next.match.index > 0) {
+          appendPlainText(target, remainder.slice(0, next.match.index));
+        }
+
+        if (next.type === "link") {
+          const href = safeLinkUrl(next.match[2]);
+          if (href) {
+            const link = document.createElement("a");
+            link.href = href;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.addEventListener("click", (event) => event.stopPropagation());
+            appendInlineMarkdown(link, next.match[1]);
+            target.appendChild(link);
+          } else {
+            appendPlainText(target, next.match[1]);
+          }
+        } else if (next.type === "code") {
+          const code = document.createElement("code");
+          code.textContent = next.match[1];
+          target.appendChild(code);
+        } else if (next.type === "bold") {
+          const strong = document.createElement("strong");
+          appendInlineMarkdown(strong, next.match[1]);
+          target.appendChild(strong);
+        }
+
+        cursor += next.match.index + next.match[0].length;
+      }
+    }
+
+    function renderMarkdown(target, text) {
+      const lines = String(text || "").replace(/\\r\\n/g, "\\n").split("\\n");
+      target.replaceChildren();
+      let paragraph = [];
+
+      function flushParagraph() {
+        if (!paragraph.length) return;
+        const node = document.createElement("p");
+        appendInlineMarkdown(node, paragraph.join("\\n"));
+        target.appendChild(node);
+        paragraph = [];
+      }
+
+      function listMatch(line, kind) {
+        return kind === "ol"
+          ? line.match(/^\\s*\\d+[.)]\\s+(.+)$/)
+          : line.match(/^\\s*[-*+]\\s+(.+)$/);
+      }
+
+      let index = 0;
+      while (index < lines.length) {
+        const line = lines[index];
+        const fence = line.match(/^```(.*)$/);
+        if (fence) {
+          flushParagraph();
+          index += 1;
+          const codeLines = [];
+          while (index < lines.length && !lines[index].startsWith("```")) {
+            codeLines.push(lines[index]);
+            index += 1;
+          }
+          if (index < lines.length) index += 1;
+          const pre = document.createElement("pre");
+          const code = document.createElement("code");
+          const language = fence[1].trim();
+          if (language) code.dataset.language = language;
+          code.textContent = codeLines.join("\\n");
+          pre.appendChild(code);
+          target.appendChild(pre);
+          continue;
+        }
+
+        if (!line.trim()) {
+          flushParagraph();
+          index += 1;
+          continue;
+        }
+
+        const heading = line.match(/^(#{1,6})\\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          const level = Math.min(6, heading[1].length);
+          const node = document.createElement(`h${level}`);
+          appendInlineMarkdown(node, heading[2]);
+          target.appendChild(node);
+          index += 1;
+          continue;
+        }
+
+        const unordered = listMatch(line, "ul");
+        const ordered = listMatch(line, "ol");
+        if (unordered || ordered) {
+          flushParagraph();
+          const kind = ordered ? "ol" : "ul";
+          const list = document.createElement(kind);
+          while (index < lines.length) {
+            const itemMatch = listMatch(lines[index], kind);
+            if (!itemMatch) break;
+            const item = document.createElement("li");
+            appendInlineMarkdown(item, itemMatch[1]);
+            list.appendChild(item);
+            index += 1;
+          }
+          target.appendChild(list);
+          continue;
+        }
+
+        paragraph.push(line);
+        index += 1;
+      }
+
+      flushParagraph();
+    }
+
+    function setMessageContent(view, text) {
+      if (!view || !view.content) return;
+      const role = view.node?.dataset?.role || view.role || "";
+      if (role === "assistant") renderMarkdown(view.content, text);
+      else view.content.textContent = text || "";
+    }
+
+    function renderAssistantSources(assistantView, sources) {
+      if (!assistantView) return;
+      if (assistantView.sourceList) assistantView.sourceList.remove();
+      assistantView.sourceList = null;
+      const list = document.createElement("div");
+      list.className = "assistant-sources";
+
+      for (const source of sources || []) {
+        const href = safeLinkUrl(source.url || "");
+        if (!href) continue;
+        const link = document.createElement("a");
+        link.className = "assistant-source-link";
+        link.href = href;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = compactMeta([
+          source.index ? `[${source.index}]` : "",
+          source.host || hostLabel(source.url || "") || source.title || "Source",
+        ]);
+        link.addEventListener("click", (event) => event.stopPropagation());
+        list.appendChild(link);
+      }
+
+      if (!list.childElementCount) return;
+      assistantView.sourceList = list;
+      assistantView.extras.appendChild(list);
+    }
+
     function appendMessage(role, text) {
       const node = document.createElement("article");
       node.className = "message";
@@ -1323,7 +1610,6 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
       const content = document.createElement("div");
       content.className = "message-content";
-      content.textContent = text;
 
       const extras = document.createElement("div");
       extras.className = "message-extras";
@@ -1332,8 +1618,10 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       node.append(content);
       node.append(extras);
       messages.appendChild(node);
+      const view = {node, content, extras, role};
+      setMessageContent(view, text);
       scrollToBottom();
-      return {node, content, extras};
+      return view;
     }
 
     function setAssistantPlaceholder(assistantView, text) {
@@ -1826,7 +2114,9 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         group.preview = query
           ? `Query: ${query}`
           : previewValue(args || group.resultPayload || group.progress.map((item) => item.detail), 180);
-        group.sources = extractSourcesFromResult(group.result?.detail?.result, query, group.tool_call_id);
+        group.sources = group.tool_name === "web_search"
+          ? extractSourcesFromResult(group.result?.detail?.result, query, group.tool_call_id)
+          : [];
         group.detail = {
           tool_name: group.tool_name,
           tool_call_id: group.tool_call_id,
@@ -2058,6 +2348,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         const key = `${source.url}|${source.title}`;
         if (!key || seenSources.has(key)) continue;
         seenSources.add(key);
+        source.index = sources.length + 1;
         sources.push(source);
       }
       const webSearchCount = toolGroups.filter((group) => group.tool_name === "web_search").length;
@@ -2179,16 +2470,19 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       item.setAttribute("tabindex", "0");
       const head = document.createElement("div");
       head.className = "source-card-head";
+      const index = document.createElement("span");
+      index.className = "source-card-index";
+      index.textContent = source.index ? `[${source.index}]` : "";
       const title = document.createElement("a");
       title.className = "source-card-title";
-      title.href = source.url || "#";
+      title.href = safeLinkUrl(source.url || "") || "#";
       title.target = "_blank";
       title.rel = "noreferrer";
       title.textContent = source.title;
       const meta = document.createElement("div");
       meta.className = "source-card-meta";
       meta.textContent = compactMeta([source.host, source.query ? `query: ${source.query}` : ""]);
-      head.append(title, meta);
+      head.append(index, title, meta);
       item.append(head);
       if (source.snippet) {
         const snippet = document.createElement("div");
@@ -2368,7 +2662,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
     function observationPreview(group) {
       const sources = group.sources || [];
-      const sourceLines = sources.slice(0, 3).map((source, index) => `${index + 1}. ${source.title}`).filter(Boolean);
+      const sourceLines = sources.slice(0, 3).map((source, index) => `${source.index || index + 1}. ${source.title}`).filter(Boolean);
       if (sourceLines.length) return sourceLines.join("\\n");
       if (group.progress?.length) return group.progress.map((item) => item.title || item.preview).filter(Boolean).join("\\n");
       return group.result ? group.result.preview : group.preview;
@@ -2464,7 +2758,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         .slice(0, 3)
         .map((source, index) => {
           const host = source.host || hostLabel(source.url || "");
-          return `${index + 1}. ${compactMeta([source.title, host])}`;
+          return `${source.index || index + 1}. ${compactMeta([source.title, host])}`;
         })
         .filter(Boolean)
         .join("\\n");
@@ -2811,16 +3105,8 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       assistantView.completePayload = payload;
       const model = buildRunDetailsModel(assistantView);
       renderTraceCapsule(assistantView, model);
+      renderAssistantSources(assistantView, model.sources);
       assistantView.node.classList.add("has-detail");
-      assistantView.node.setAttribute("role", "button");
-      assistantView.node.setAttribute("tabindex", "0");
-      assistantView.node.addEventListener("click", () => renderAssistantTrace(assistantView));
-      assistantView.node.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          renderAssistantTrace(assistantView);
-        }
-      });
     }
 
     function processSseChunk(chunk, onPayload) {
@@ -2849,13 +3135,14 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       stopButton.disabled = false;
       status.textContent = "Running";
       loopStatus.textContent = "Running";
+      if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView);
 
       function handlePayload(payload) {
         if (payload.type === "assistant_delta") {
           assistantText += payload.text || "";
           assistantView.textStarted = true;
           clearAssistantPlaceholder(assistantView);
-          assistantView.content.textContent = assistantText;
+          setMessageContent(assistantView, assistantText);
           scrollToBottom();
           return;
         }
@@ -2872,10 +3159,12 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
           } else if (payload.stage === "model_note") {
             setAssistantPlaceholder(assistantView, "Thinking...");
           }
+          if (activeAssistantView === assistantView) renderAssistantTrace(assistantView);
           return;
         }
         if (payload.type === "usage") {
           tokenCount.textContent = payload.tokens ?? tokenCount.textContent;
+          if (activeAssistantView === assistantView) renderAssistantTrace(assistantView);
           return;
         }
         if (payload.type === "complete") {
@@ -2883,18 +3172,19 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
             assistantText = payload.reply;
             assistantView.textStarted = true;
             clearAssistantPlaceholder(assistantView);
-            assistantView.content.textContent = assistantText;
+            setMessageContent(assistantView, assistantText);
           } else if (!assistantText) {
             assistantView.textStarted = true;
             assistantView.preserveActivityPath = true;
             clearAssistantPlaceholder(assistantView);
-            assistantView.content.textContent = "No response returned.";
+            setMessageContent(assistantView, "No response returned.");
           }
           turnCount.textContent = payload.turns ?? turnCount.textContent;
           tokenCount.textContent = payload.tokens ?? tokenCount.textContent;
           status.textContent = "Ready";
           loopStatus.textContent = "Complete";
           bindAssistantDetail(assistantView, payload);
+          if (activeAssistantView === assistantView) renderAssistantTrace(assistantView);
           return;
         }
         if (payload.type === "error") {
@@ -2938,8 +3228,9 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
           assistantView.textStarted = true;
           assistantView.preserveActivityPath = true;
           clearAssistantPlaceholder(assistantView);
-          assistantView.content.textContent = "Run stopped by user.";
+          setMessageContent(assistantView, "Run stopped by user.");
           bindAssistantDetail(assistantView, stopPayload);
+          if (activeAssistantView === assistantView) renderAssistantTrace(assistantView);
           status.textContent = "Stopped";
           loopStatus.textContent = "Stopped";
           return;
@@ -2947,7 +3238,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         assistantView.textStarted = true;
         assistantView.preserveActivityPath = true;
         clearAssistantPlaceholder(assistantView);
-        assistantView.content.textContent = "No response returned.";
+        setMessageContent(assistantView, "No response returned.");
         appendMessage("error", error.message);
         status.textContent = "Error";
         loopStatus.textContent = "Error";
@@ -2984,6 +3275,11 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       button.addEventListener("click", async () => {
         const nextMode = button.dataset.modeOption;
         if (!nextMode || nextMode === activeMode || currentAbortController) return;
+        const hasConversation = messages.children.length > 0 || Number(turnCount.textContent || "0") > 0;
+        if (hasConversation && !window.confirm("Switching modes starts a new chat. Continue?")) {
+          input.focus();
+          return;
+        }
         modeButtons.forEach((modeButton) => { modeButton.disabled = true; });
         status.textContent = "Switching";
         try {
@@ -3329,6 +3625,7 @@ class ChatbotWebApp:
         with self._lock:
             self.chatbot.agent._query_guard.force_idle()
             self.chatbot.reset()
+            self._run_counter = 0
         return {"ok": True}
 
     def set_mode(self, mode: str) -> dict[str, str | bool]:
@@ -3343,6 +3640,7 @@ class ChatbotWebApp:
                 self._run_counter = 0
             else:
                 self.chatbot.reset()
+                self._run_counter = 0
         return {"ok": True, "mode": self.tool_mode or "chatbot"}
 
 
@@ -3389,6 +3687,7 @@ def _handler_for(app: ChatbotWebApp) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:
             if self.path == "/" or self.path == "/index.html":
+                app.reset()
                 self._send_bytes(
                     HTTPStatus.OK,
                     render_index_html(tool_mode=app.tool_mode).encode("utf-8"),
