@@ -3233,13 +3233,15 @@ class ChatbotWebApp:
     """Thread-safe facade used by the HTTP handler."""
 
     chatbot: Chatbot
-    tool_mode: ToolMode = "chatbot"
+    tool_mode: ToolMode | None = None
     chatbot_factory: Callable[[ToolMode], Chatbot] | None = None
 
     def __post_init__(self) -> None:
         self._lock = threading.Lock()
         self._loop = asyncio.new_event_loop()
         self._run_counter = 0
+        if self.tool_mode is None:
+            self.tool_mode = self.chatbot.tool_mode or "chatbot"
 
     def _run_async(self, coro: Any) -> Any:
         return self._loop.run_until_complete(coro)
@@ -3323,7 +3325,9 @@ class ChatbotWebApp:
         return {"ok": True}
 
     def reset(self) -> dict[str, bool]:
+        self.chatbot.agent.abort()
         with self._lock:
+            self.chatbot.agent._query_guard.force_idle()
             self.chatbot.reset()
         return {"ok": True}
 
@@ -3339,7 +3343,7 @@ class ChatbotWebApp:
                 self._run_counter = 0
             else:
                 self.chatbot.reset()
-        return {"ok": True, "mode": self.tool_mode}
+        return {"ok": True, "mode": self.tool_mode or "chatbot"}
 
 
 def _handler_for(app: ChatbotWebApp) -> type[BaseHTTPRequestHandler]:

@@ -115,6 +115,41 @@ def test_build_chatbot_workspace_tools_use_workspace_prompt(monkeypatch):
     assert "cite file paths" in bot.agent._config.system_prompt
 
 
+def test_all_mode_hides_mutating_tools_without_explicit_write_request():
+    provider = MockProvider(responses=["faq answer"])
+    agent = Agent(
+        config=CalciferConfig(api_key="mock", base_url="mock", model="mock"),
+        tools=select_tools("all"),
+        provider=provider,
+    )
+    bot = Chatbot(agent=agent, tool_mode="all")
+
+    bot.ask_sync("把上面的内容整理成 FAQ")
+
+    tool_names = {tool["function"]["name"] for tool in provider.calls[0]["tools"]}
+    assert "file_write" not in tool_names
+    assert "file_edit" not in tool_names
+    assert "bash" not in tool_names
+    assert "web_search" in tool_names
+
+
+def test_all_mode_exposes_mutating_tools_for_explicit_write_request():
+    provider = MockProvider(responses=["saved"])
+    agent = Agent(
+        config=CalciferConfig(api_key="mock", base_url="mock", model="mock"),
+        tools=select_tools("all"),
+        provider=provider,
+    )
+    bot = Chatbot(agent=agent, tool_mode="all")
+
+    bot.ask_sync("把 FAQ 保存为 python_314_faq.md")
+
+    tool_names = {tool["function"]["name"] for tool in provider.calls[0]["tools"]}
+    assert "file_write" in tool_names
+    assert "file_edit" in tool_names
+    assert "bash" in tool_names
+
+
 def test_build_system_prompt_uses_mode_specific_rules():
     none_prompt = build_system_prompt("none")
     chatbot_prompt = build_system_prompt("chatbot")
@@ -128,6 +163,8 @@ def test_build_system_prompt_uses_mode_specific_rules():
     assert "cite file paths" in workspace_prompt
     assert "shell commands" in all_prompt
     assert "file changes" in all_prompt
+    assert "Only use file_write, file_edit, or bash" in all_prompt
+    assert "explicitly asks you to write, edit, save, create files, or run commands" in all_prompt
 
 
 def test_build_system_prompt_appends_rules_to_custom_prompt():

@@ -7,8 +7,9 @@ delegates all model/tool behavior to `calcifer.Agent`.
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Literal
+from typing import AsyncIterator, Iterator, Literal
 
 from calcifer import Agent, AgentResult, CalciferConfig, Message, StreamEvent
 from calcifer.tool import Tool
@@ -21,6 +22,27 @@ ToolMode = Literal["none", "chatbot", "workspace", "all"]
 ProviderMode = Literal["deepseek", "openai"]
 WEB_TOOL_NAMES = {"web_search"}
 WORKSPACE_TOOL_NAMES = {"file_read", "glob", "grep", "web_search"}
+MUTATING_TOOL_NAMES = {"bash", "file_write", "file_edit"}
+MUTATION_INTENT_MARKERS = (
+    "write",
+    "edit",
+    "save",
+    "create file",
+    "create a file",
+    "modify",
+    "update file",
+    "run command",
+    "execute",
+    "写",
+    "写入",
+    "保存",
+    "创建",
+    "新建",
+    "修改",
+    "编辑",
+    "执行",
+    "运行",
+)
 MODE_PROMPT_RULES: dict[str, str] = {
     "none": (
         "Mode: none. Answer from the conversation and your general knowledge only. "
@@ -39,9 +61,12 @@ MODE_PROMPT_RULES: dict[str, str] = {
     ),
     "all": (
         "Mode: all. You may use all configured tools, including shell commands and "
-        "file changes. Use mutating tools only when the user asks for repository "
-        "changes, summarize commands or file changes you made, and cite file paths "
-        "or web sources for claims that depend on tool results."
+        "file changes. Only use file_write, file_edit, or bash when the user "
+        "explicitly asks you to write, edit, save, create files, or run commands. "
+        "For requests to summarize, organize, draft, or answer in chat, return the "
+        "content in the chat without modifying files. Summarize commands or file "
+        "changes you made, and cite file paths or web sources for claims that "
+        "depend on tool results."
     ),
 }
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -118,40 +143,86 @@ def select_tools(mode: ToolMode = "chatbot") -> list[Tool]:
     raise ValueError(f"Unknown tool mode: {mode}")
 
 
+def has_mutation_intent(prompt: str) -> bool:
+    """Return whether a user explicitly asks to mutate local state."""
+    normalized = prompt.lower()
+    return any(marker in normalized for marker in MUTATION_INTENT_MARKERS)
+
+
+def infer_tool_mode(tools: list[Tool]) -> ToolMode:
+    """Infer a known chatbot mode from a concrete tool list."""
+    names = {tool.name for tool in tools}
+    if not names:
+        return "none"
+    if names == {tool.name for tool in select_tools("chatbot")}:
+        return "chatbot"
+    if names == {tool.name for tool in select_tools("workspace")}:
+        return "workspace"
+    if names == {tool.name for tool in select_tools("all")}:
+        return "all"
+    return "chatbot"
+
+
 @dataclass
 class Chatbot:
     """Stateful chatbot session around a Calcifer Agent."""
 
     agent: Agent
+    tool_mode: ToolMode | None = None
     conversation: list[Message] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.tool_mode is None:
+            self.tool_mode = infer_tool_mode(self.agent._tools)
+
+    @contextmanager
+    def _request_tools(self, prompt: str) -> Iterator[None]:
+        """Temporarily hide mutating tools unless all-mode intent is explicit."""
+        if self.tool_mode != "all" or has_mutation_intent(prompt):
+            yield
+            return
+
+        original_tools = self.agent._tools
+        original_by_name = self.agent._tools_by_name
+        filtered_tools = [tool for tool in original_tools if tool.name not in MUTATING_TOOL_NAMES]
+        self.agent._tools = filtered_tools
+        self.agent._tools_by_name = {tool.name: tool for tool in filtered_tools}
+        try:
+            yield
+        finally:
+            self.agent._tools = original_tools
+            self.agent._tools_by_name = original_by_name
 
     async def ask(self, prompt: str) -> AgentResult:
         """Run one non-streaming chatbot turn and preserve history."""
-        result = await self.agent.run(
-            prompt,
-            messages=self.conversation if self.conversation else None,
-        )
+        with self._request_tools(prompt):
+            result = await self.agent.run(
+                prompt,
+                messages=self.conversation if self.conversation else None,
+            )
         self.conversation = result.messages
         return result
 
     def ask_sync(self, prompt: str) -> AgentResult:
         """Synchronous wrapper for scripts and tests."""
-        result = self.agent.run_sync(
-            prompt,
-            messages=self.conversation if self.conversation else None,
-        )
+        with self._request_tools(prompt):
+            result = self.agent.run_sync(
+                prompt,
+                messages=self.conversation if self.conversation else None,
+            )
         self.conversation = result.messages
         return result
 
     async def stream(self, prompt: str) -> AsyncIterator[StreamEvent]:
         """Stream one chatbot turn and preserve history on completion."""
-        async for event in self.agent.run_stream(
-            prompt,
-            messages=self.conversation if self.conversation else None,
-        ):
-            if event.type == "run_complete" and event.result:
-                self.conversation = event.result.messages
-            yield event
+        with self._request_tools(prompt):
+            async for event in self.agent.run_stream(
+                prompt,
+                messages=self.conversation if self.conversation else None,
+            ):
+                if event.type == "run_complete" and event.result:
+                    self.conversation = event.result.messages
+                yield event
 
     def reset(self) -> None:
         """Clear conversation history for this chatbot session."""
@@ -182,4 +253,4 @@ def build_chatbot(
         system_prompt=build_system_prompt(tools, base_prompt=system_prompt),
     )
     agent = Agent(config=config, tools=select_tools(tools))
-    return Chatbot(agent=agent)
+    return Chatbot(agent=agent, tool_mode=tools)

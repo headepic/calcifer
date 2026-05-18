@@ -12,7 +12,7 @@ from calcifer import Agent, CalciferConfig, Message, StreamEvent, Usage
 from calcifer.testing import MockProvider
 
 import calcifer_chatbot.web as web_module
-from calcifer_chatbot.app import Chatbot
+from calcifer_chatbot.app import Chatbot, select_tools
 from calcifer_chatbot.web import ChatbotWebApp, _handler_for, _stream_event_payload, render_index_html
 
 
@@ -40,8 +40,9 @@ def _make_mode_bot(mode: str) -> Chatbot:
             system_prompt=f"mode:{mode}",
         ),
         provider=provider,
+        tools=select_tools(mode),  # type: ignore[arg-type]
     )
-    return Chatbot(agent=agent)
+    return Chatbot(agent=agent, tool_mode=mode)  # type: ignore[arg-type]
 
 
 class LoopStickyProvider:
@@ -395,6 +396,23 @@ def test_web_app_set_mode_rebuilds_chatbot_and_resets_conversation():
     assert app.chatbot.agent._config.system_prompt == "mode:workspace"
 
 
+def test_web_app_adopts_initial_chatbot_tool_mode():
+    provider = MockProvider(responses=["all answer"])
+    agent = Agent(
+        config=CalciferConfig(
+            api_key="mock",
+            base_url="mock",
+            model="mock",
+            system_prompt="mode:all",
+        ),
+        provider=provider,
+        tools=select_tools("all"),
+    )
+    app = ChatbotWebApp(Chatbot(agent=agent, tool_mode="all"))
+
+    assert app.tool_mode == "all"
+
+
 def test_web_app_rejects_unknown_mode():
     app = ChatbotWebApp(_make_mode_bot("chatbot"))
 
@@ -425,6 +443,18 @@ def test_web_app_reset_clears_conversation():
 
     assert payload == {"ok": True}
     assert app.chatbot.conversation == []
+
+
+def test_web_app_reset_aborts_and_forces_agent_idle():
+    app = _make_web_app(["unused"])
+    generation = app.chatbot.agent._query_guard.begin()
+    app.chatbot.agent._query_guard.mark_running(generation)
+
+    payload = app.reset()
+
+    assert payload == {"ok": True}
+    assert app.chatbot.agent._abort_event.is_set()
+    assert app.chatbot.agent._query_guard.is_idle
 
 
 def test_web_app_stream_chat_emits_trace_and_completion():
