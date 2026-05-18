@@ -1667,6 +1667,19 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       loopDetailPayload.replaceChildren(renderStructuredValue(filtered));
     }
 
+    function scrollTracePanelToTop() {
+      agentLoopEvents.scrollTop = 0;
+      agentLoopPanel.scrollTop = 0;
+    }
+
+    function anchorInspectorDetail() {
+      loopDetailPayload.scrollTop = 0;
+      requestAnimationFrame(() => {
+        loopDetailPayload.scrollTop = 0;
+        agentLoopDetail.scrollIntoView({block: "start", behavior: "auto"});
+      });
+    }
+
     function renderInspectorDetail(node) {
       if (!node) return;
       selectedInspectorNode = node;
@@ -1678,6 +1691,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       if (loopDetailFilter) loopDetailFilter.value = "";
       if (copyPayloadButton) copyPayloadButton.textContent = "Copy";
       renderInspectorPayload(payload);
+      anchorInspectorDetail();
     }
 
     async function copyInspectorPayload() {
@@ -2790,6 +2804,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       const model = buildRunDetailsModel(assistantView);
       loopStatus.textContent = model.statusLabel;
       renderInspector(model);
+      scrollTracePanelToTop();
     }
 
     function bindAssistantDetail(assistantView, payload) {

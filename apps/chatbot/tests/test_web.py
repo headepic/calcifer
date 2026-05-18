@@ -224,6 +224,13 @@ def test_index_html_contains_chat_surface():
     assert 'function renderInspectorPayload(payload, filterText = "")' in html
     assert 'function filterInspectorPayload(value, query)' in html
     assert 'function copyInspectorPayload()' in html
+    assert 'function scrollTracePanelToTop()' in html
+    assert 'function anchorInspectorDetail()' in html
+    assert 'agentLoopEvents.scrollTop = 0;' in html
+    assert 'loopDetailPayload.scrollTop = 0;' in html
+    assert 'agentLoopDetail.scrollIntoView({block: "start", behavior: "auto"});' in html
+    assert 'scrollTracePanelToTop();' in html
+    assert 'anchorInspectorDetail();' in html
     assert 'JSON.stringify({summary: model.summary, trace: model.trace}, null, 2)' in html
     assert 'selectTraceNode(node, element)' in html
     assert 'Input' in html
