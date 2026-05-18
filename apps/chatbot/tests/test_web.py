@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
+import re
 import shutil
 import subprocess
 import threading
@@ -207,9 +209,9 @@ def test_index_html_contains_chat_surface():
     assert '.message[data-role="assistant"].is-pending .message-content' in html
     assert 'function setAssistantPlaceholder(assistantView, text)' in html
     assert 'function clearAssistantPlaceholder(assistantView)' in html
-    assert 'function renderMarkdown(target, text)' in html
-    assert 'function appendInlineMarkdown(target, text)' in html
-    assert 'function setMessageContent(view, text)' in html
+    assert 'function renderMarkdown(target, text, sourceIndexByUrl = new Map())' in html
+    assert 'function appendInlineMarkdown(target, text, sourceIndexByUrl = new Map())' in html
+    assert 'function setMessageContent(view, text, sourceIndexByUrl = null)' in html
     assert 'function renderAssistantSources(assistantView, sources)' in html
     assert 'function appendAssistantPathItem(assistantView, item)' in html
     assert 'function updateAssistantPathFromTrace(assistantView, payload)' in html
@@ -245,12 +247,12 @@ def test_index_html_contains_chat_surface():
     assert 'className = "source-card-index"' in html
     assert 'className = "assistant-sources"' in html
     assert 'className = "assistant-source-link"' in html
-    assert 'window.confirm("Switching modes starts a new chat. Continue?")' in html
+    assert "window.confirm" not in html
     assert 'JSON.stringify({summary: model.summary, trace: model.trace}, null, 2)' in html
     assert 'selectTraceNode(node, element)' in html
     assert 'Input' in html
     assert 'Thought' in html
-    assert 'reasoning flow' in html
+    assert 'LLM context and decision' in html
     assert 'LLM input' in html
     assert 'LLM output' in html
     assert 'Action' in html
@@ -374,6 +376,112 @@ def test_index_html_contains_chat_surface():
     assert 'class="status-pill metric-pill"' in html
     assert '.metric-pill {' in html
     assert "data-role" in html
+
+
+def test_index_html_uses_app_mode_confirm_instead_of_native_confirm():
+    html = render_index_html()
+
+    assert "window.confirm" not in html
+    assert 'id="mode-confirm-backdrop"' in html
+    assert 'aria-describedby="mode-confirm-copy"' in html
+    assert 'id="mode-confirm-cancel"' in html
+    assert 'id="mode-confirm-confirm"' in html
+    assert "function requestModeSwitch(nextMode)" in html
+    assert "function cancelPendingModeSwitch()" in html
+    assert "function confirmPendingModeSwitch()" in html
+    assert "switchMode(pendingModeSwitch);" in html
+    assert "modeConfirmTrigger = document.activeElement;" in html
+    assert "restoreModeConfirmFocus()" in html
+    assert "function trapModeConfirmFocus(event)" in html
+    assert "event.preventDefault();" in html
+    assert "if (isModeConfirmOpen()) return;" in html
+    assert "Cancel" in html
+    assert "Switch mode" in html
+
+
+def test_index_html_rerenders_markdown_links_with_source_indices():
+    html = render_index_html()
+
+    assert "function buildSourceIndexByUrl(sources)" in html
+    assert "function isCitationLikeLinkText(text)" in html
+    assert "function normalizeSourceUrl(value)" in html
+    assert "sourceIndexByUrl" in html
+    assert "renderMarkdown(view.content, text, sourceIndexByUrl || view.sourceIndexByUrl || new Map());" in html
+    assert "setMessageContent(assistantView, assistantView.currentText, model.sourceIndexByUrl);" in html
+    assert "if (source?.index && !isCitationLikeLinkText(next.match[1]))" in html
+
+
+def _extract_js_function(script: str, name: str, next_name: str) -> str:
+    match = re.search(rf"    function {name}\(", script)
+    assert match, f"missing JS function {name}"
+    next_match = re.search(rf"\n\n    function {next_name}\(", script[match.end() :])
+    assert next_match, f"missing JS function boundary after {name}"
+    end = match.end() + next_match.start()
+    return script[match.start() : end]
+
+
+def test_source_index_markdown_rendering_avoids_duplicate_citation_prefixes():
+    node = shutil.which("node")
+    if node is None:
+        raise AssertionError("node executable is required for citation rendering check")
+
+    html = render_index_html()
+    script = html.split("<script>\n", 1)[1].split("\n  </script>", 1)[0]
+    functions = "\n".join(
+        _extract_js_function(script, name, next_name)
+        for name, next_name in (
+            ("appendPlainText", "safeLinkUrl"),
+            ("safeLinkUrl", "normalizeSourceUrl"),
+            ("normalizeCitationUrl", "citedLinkCount"),
+            ("normalizeSourceUrl", "buildSourceIndexByUrl"),
+            ("isCitationLikeLinkText", "appendInlineMarkdown"),
+            ("appendInlineMarkdown", "renderMarkdown"),
+            ("renderMarkdown", "setMessageContent"),
+        )
+    )
+    node_script = f"""
+const textNode = (text) => ({{textContent: String(text || ""), children: [], appendChild() {{}}, append() {{}}}});
+global.window = {{location: {{href: "http://localhost/"}}}};
+global.document = {{
+  createTextNode: textNode,
+  createElement(tag) {{
+    return {{
+      tagName: tag.toUpperCase(),
+      children: [],
+      textContent: "",
+      dataset: {{}},
+      addEventListener() {{}},
+      appendChild(child) {{ this.children.push(child); return child; }},
+      append(...children) {{ this.children.push(...children); }},
+      replaceChildren(...children) {{ this.children = children; this.textContent = ""; }},
+    }};
+  }},
+}};
+{functions}
+function flatten(node) {{
+  return String(node.textContent || "") + (node.children || []).map(flatten).join("");
+}}
+const sourceIndexByUrl = new Map([["https://example.com/a", {{index: 1}}]]);
+const target = document.createElement("div");
+renderMarkdown(target, {json.dumps("[Title](https://example.com/a)\n\n[1](https://example.com/a)")}, sourceIndexByUrl);
+process.stdout.write(JSON.stringify(target.children.map(flatten)));
+"""
+    result = subprocess.run(["node", "-e", node_script], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == ["[1] Title", "1"]
+
+
+def test_index_html_defaults_trace_capsule_to_steps_and_expands_thoughts():
+    html = render_index_html()
+
+    assert 'renderAssistantTrace(assistantView, {defaultTab: "steps"});' in html
+    assert 'const latestThoughtId = [...steps].reverse().find((step) => step.kind === "thought")?.id || "";' in html
+    assert 'appendTimelineStep(timeline, step, step.id === latestThoughtId);' in html
+    assert 'meta: "LLM context and decision"' in html
+    assert "reasoning flow" not in html
+    assert "Understood request" in html
+    assert "Searched web" in html
+    assert "Answered with sources" in html
 
 
 def test_web_source_script_is_valid_javascript():

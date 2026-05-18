@@ -43,6 +43,12 @@ MUTATION_INTENT_MARKERS = (
     "执行",
     "运行",
 )
+WEB_SEARCH_LOOP_RULE = (
+    "For simple external factual queries, when web_search is appropriate, start "
+    "with one targeted web_search using 3-5 results; only search again when the "
+    "first results are insufficient, conflict with each other, or the user asks "
+    "for deeper research."
+)
 MODE_PROMPT_RULES: dict[str, str] = {
     "none": (
         "Mode: none. Answer from the conversation and your general knowledge only. "
@@ -51,13 +57,13 @@ MODE_PROMPT_RULES: dict[str, str] = {
     "chatbot": (
         "Mode: chatbot. Use web_search only when fresh, external, or source-backed "
         "information materially improves the answer. Cite web sources when you use "
-        "web_search. Keep ordinary conversation concise and natural."
+        f"web_search. {WEB_SEARCH_LOOP_RULE} Keep ordinary conversation concise and natural."
     ),
     "workspace": (
         "Mode: workspace. You may use web_search plus read-only local workspace "
         "tools to inspect project files. Use local workspace context when the user "
         "asks about this repository, and cite file paths for claims based on files. "
-        "Cite web sources for claims based on web_search."
+        f"Cite web sources for claims based on web_search. {WEB_SEARCH_LOOP_RULE}"
     ),
     "all": (
         "Mode: all. You may use all configured tools, including shell commands and "
@@ -66,7 +72,7 @@ MODE_PROMPT_RULES: dict[str, str] = {
         "For requests to summarize, organize, draft, or answer in chat, return the "
         "content in the chat without modifying files. Summarize commands or file "
         "changes you made, and cite file paths or web sources for claims that "
-        "depend on tool results."
+        f"depend on tool results. {WEB_SEARCH_LOOP_RULE}"
     ),
 }
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"

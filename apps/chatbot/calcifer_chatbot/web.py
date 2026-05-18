@@ -172,6 +172,60 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       cursor: wait;
       opacity: 0.62;
     }
+    .mode-confirm-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(31, 31, 29, 0.34);
+    }
+    .mode-confirm-backdrop[hidden] {
+      display: none;
+    }
+    .mode-confirm-panel {
+      width: min(420px, 100%);
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 8px;
+      box-shadow: 0 18px 44px rgba(31, 31, 29, 0.18);
+    }
+    .mode-confirm-title {
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .mode-confirm-copy {
+      margin: 0;
+      color: var(--muted-strong);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .mode-confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .mode-confirm-button {
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .mode-confirm-button.is-primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
     .status-dot {
       width: 7px;
       height: 7px;
@@ -1347,6 +1401,16 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       </section>
     </main>
   </div>
+  <div id="mode-confirm-backdrop" class="mode-confirm-backdrop" hidden>
+    <section class="mode-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="mode-confirm-title" aria-describedby="mode-confirm-copy">
+      <div id="mode-confirm-title" class="mode-confirm-title">Switch mode?</div>
+      <p id="mode-confirm-copy" class="mode-confirm-copy">Switching modes starts a new chat and clears the current messages in this view.</p>
+      <div class="mode-confirm-actions">
+        <button id="mode-confirm-cancel" class="mode-confirm-button" type="button">Cancel</button>
+        <button id="mode-confirm-confirm" class="mode-confirm-button is-primary" type="button">Switch mode</button>
+      </div>
+    </section>
+  </div>
   <script>
     const form = document.getElementById("chat-form");
     const input = document.getElementById("message-input");
@@ -1368,6 +1432,10 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     const stopButton = document.getElementById("stop-button");
     const toolModePill = document.getElementById("tool-mode-pill");
     const modeButtons = Array.from(document.querySelectorAll("[data-mode-option]"));
+    const modeConfirmBackdrop = document.getElementById("mode-confirm-backdrop");
+    const modeConfirmCancel = document.getElementById("mode-confirm-cancel");
+    const modeConfirmConfirm = document.getElementById("mode-confirm-confirm");
+    const modeConfirmCopy = document.getElementById("mode-confirm-copy");
     const turnCount = document.getElementById("turn-count");
     const tokenCount = document.getElementById("token-count");
     const traceTabs = Array.from(document.querySelectorAll("[data-trace-tab]"));
@@ -1377,6 +1445,8 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     let selectedInspectorPayload = null;
     let activeTraceTab = "overview";
     let activeMode = "__TOOL_MODE__";
+    let pendingModeSwitch = "";
+    let modeConfirmTrigger = null;
 
     function scrollToBottom() {
       threadWrap.scrollTop = threadWrap.scrollHeight;
@@ -1405,6 +1475,99 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       loopStatus.textContent = "Idle";
     }
 
+    function hasConversationState() {
+      return messages.children.length > 0 || Number(turnCount.textContent || "0") > 0;
+    }
+
+    function isModeConfirmOpen() {
+      return Boolean(modeConfirmBackdrop && !modeConfirmBackdrop.hidden);
+    }
+
+    function restoreModeConfirmFocus() {
+      const target = modeConfirmTrigger;
+      modeConfirmTrigger = null;
+      if (target && typeof target.focus === "function" && target.isConnected !== false) {
+        target.focus();
+      } else {
+        input.focus();
+      }
+    }
+
+    function closeModeConfirm(options = {}) {
+      pendingModeSwitch = "";
+      if (modeConfirmBackdrop) modeConfirmBackdrop.hidden = true;
+      if (options.restoreFocus !== false) restoreModeConfirmFocus();
+    }
+
+    function requestModeSwitch(nextMode) {
+      pendingModeSwitch = nextMode || "";
+      if (!pendingModeSwitch || !modeConfirmBackdrop) return;
+      modeConfirmTrigger = document.activeElement;
+      if (modeConfirmCopy) {
+        modeConfirmCopy.textContent = `Switching from ${activeMode} to ${pendingModeSwitch} starts a new chat and clears the current messages in this view.`;
+      }
+      modeConfirmBackdrop.hidden = false;
+      modeConfirmConfirm?.focus();
+    }
+
+    function cancelPendingModeSwitch() {
+      closeModeConfirm();
+    }
+
+    function modeConfirmFocusableElements() {
+      if (!modeConfirmBackdrop) return [];
+      return Array.from(modeConfirmBackdrop.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"))
+        .filter((element) => !element.disabled && (element.getClientRects().length > 0 || element === document.activeElement));
+    }
+
+    function trapModeConfirmFocus(event) {
+      if (!isModeConfirmOpen() || event.key !== "Tab") return;
+      const focusable = modeConfirmFocusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        modeConfirmConfirm?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    async function switchMode(nextMode) {
+      if (!nextMode || nextMode === activeMode || currentAbortController) return;
+      closeModeConfirm({restoreFocus: false});
+      modeButtons.forEach((modeButton) => { modeButton.disabled = true; });
+      status.textContent = "Switching";
+      try {
+        const response = await fetch("/api/mode", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({mode: nextMode}),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Mode switch failed");
+        setActiveMode(payload.mode || nextMode);
+        clearConversationView();
+      } catch (error) {
+        status.textContent = "Error";
+        appendMessage("error", error.message || "Mode switch failed");
+      } finally {
+        modeButtons.forEach((modeButton) => { modeButton.disabled = false; });
+        input.focus();
+      }
+    }
+
+    function confirmPendingModeSwitch() {
+      if (!pendingModeSwitch) return;
+      switchMode(pendingModeSwitch);
+    }
+
     function appendPlainText(target, text) {
       if (!text) return;
       target.appendChild(document.createTextNode(text));
@@ -1421,7 +1584,38 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       }
     }
 
-    function appendInlineMarkdown(target, text) {
+    function normalizeSourceUrl(value) {
+      const href = safeLinkUrl(normalizeCitationUrl(value));
+      if (!href) return "";
+      try {
+        const url = new URL(href);
+        url.hash = "";
+        if (url.pathname !== "/" && url.pathname.endsWith("/")) {
+          url.pathname = url.pathname.slice(0, -1);
+        }
+        return url.href;
+      } catch {
+        return href;
+      }
+    }
+
+    function buildSourceIndexByUrl(sources) {
+      const sourceIndexByUrl = new Map();
+      for (const source of sources || []) {
+        const key = normalizeSourceUrl(source.url || "");
+        if (key && !sourceIndexByUrl.has(key)) sourceIndexByUrl.set(key, source);
+      }
+      return sourceIndexByUrl;
+    }
+
+    function isCitationLikeLinkText(text) {
+      const label = String(text || "").trim();
+      return /^\\[?\\d+\\]?$/.test(label)
+        || /^Source\\s+\\d+$/i.test(label)
+        || /^\\[\\d+\\]/.test(label);
+    }
+
+    function appendInlineMarkdown(target, text, sourceIndexByUrl = new Map()) {
       const source = String(text ?? "");
       let cursor = 0;
       const patterns = [
@@ -1457,7 +1651,9 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
             link.target = "_blank";
             link.rel = "noreferrer";
             link.addEventListener("click", (event) => event.stopPropagation());
-            appendInlineMarkdown(link, next.match[1]);
+            const source = sourceIndexByUrl.get(normalizeSourceUrl(href));
+            if (source?.index && !isCitationLikeLinkText(next.match[1])) link.appendChild(document.createTextNode(`[${source.index}] `));
+            appendInlineMarkdown(link, next.match[1], sourceIndexByUrl);
             target.appendChild(link);
           } else {
             appendPlainText(target, next.match[1]);
@@ -1468,7 +1664,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
           target.appendChild(code);
         } else if (next.type === "bold") {
           const strong = document.createElement("strong");
-          appendInlineMarkdown(strong, next.match[1]);
+          appendInlineMarkdown(strong, next.match[1], sourceIndexByUrl);
           target.appendChild(strong);
         }
 
@@ -1476,7 +1672,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       }
     }
 
-    function renderMarkdown(target, text) {
+    function renderMarkdown(target, text, sourceIndexByUrl = new Map()) {
       const lines = String(text || "").replace(/\\r\\n/g, "\\n").split("\\n");
       target.replaceChildren();
       let paragraph = [];
@@ -1484,7 +1680,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       function flushParagraph() {
         if (!paragraph.length) return;
         const node = document.createElement("p");
-        appendInlineMarkdown(node, paragraph.join("\\n"));
+        appendInlineMarkdown(node, paragraph.join("\\n"), sourceIndexByUrl);
         target.appendChild(node);
         paragraph = [];
       }
@@ -1529,7 +1725,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
           flushParagraph();
           const level = Math.min(6, heading[1].length);
           const node = document.createElement(`h${level}`);
-          appendInlineMarkdown(node, heading[2]);
+          appendInlineMarkdown(node, heading[2], sourceIndexByUrl);
           target.appendChild(node);
           index += 1;
           continue;
@@ -1545,7 +1741,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
             const itemMatch = listMatch(lines[index], kind);
             if (!itemMatch) break;
             const item = document.createElement("li");
-            appendInlineMarkdown(item, itemMatch[1]);
+            appendInlineMarkdown(item, itemMatch[1], sourceIndexByUrl);
             list.appendChild(item);
             index += 1;
           }
@@ -1560,10 +1756,11 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       flushParagraph();
     }
 
-    function setMessageContent(view, text) {
+    function setMessageContent(view, text, sourceIndexByUrl = null) {
       if (!view || !view.content) return;
+      view.currentText = text || "";
       const role = view.node?.dataset?.role || view.role || "";
-      if (role === "assistant") renderMarkdown(view.content, text);
+      if (role === "assistant") renderMarkdown(view.content, text, sourceIndexByUrl || view.sourceIndexByUrl || new Map());
       else view.content.textContent = text || "";
     }
 
@@ -2345,22 +2542,21 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       const seenSources = new Set();
       const sources = [];
       for (const source of toolGroups.flatMap((group) => group.sources || [])) {
-        const key = `${source.url}|${source.title}`;
+        const key = normalizeSourceUrl(source.url || "") || `${source.url}|${source.title}`;
         if (!key || seenSources.has(key)) continue;
         seenSources.add(key);
         source.index = sources.length + 1;
         sources.push(source);
       }
+      const sourceIndexByUrl = buildSourceIndexByUrl(sources);
       const webSearchCount = toolGroups.filter((group) => group.tool_name === "web_search").length;
       const resultCount = toolGroups.reduce((total, group) => total + (group.resultCount || 0), 0);
       const statusLabel = terminalNode ? terminalNode.title : finalNode ? "Complete" : "Trace";
       const pathItems = [
-        inputNode.preview ? "Input" : "",
-        ...toolGroups
-          .filter((group) => group.tool_name === "web_search")
-          .map((group) => group.preview.replace(/^Query: /, "Search web for ")),
-        resultCount ? `Observed ${resultCount} web result${resultCount === 1 ? "" : "s"}` : "",
-        finalNode ? "Response" : "",
+        inputNode.preview ? "Understood request" : "",
+        webSearchCount ? "Searched web" : "",
+        resultCount ? `Read ${resultCount} result${resultCount === 1 ? "" : "s"}` : "",
+        finalNode ? (sources.length ? "Answered with sources" : "Answered") : "",
         terminalNode ? terminalNode.title : "",
       ].filter(Boolean);
       return {
@@ -2370,6 +2566,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         turns: turnNodes,
         toolGroups,
         sources,
+        sourceIndexByUrl,
         finalNode,
         terminalNode,
         statusLabel,
@@ -2856,7 +3053,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         id: `turn-${turn.turn_id}-thought`,
         kind: "thought",
         title: "Thought",
-        meta: "reasoning flow",
+        meta: "LLM context and decision",
         preview: previewValue(thoughtSummaryText, 280),
         raw: turn.raw_events.filter((event) => event.stage === "model_note"),
         children: thoughtChildren,
@@ -3034,8 +3231,10 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       agentLoopDetail.hidden = true;
       const timeline = document.createElement("div");
       timeline.className = "reasoning-timeline";
-      for (const step of buildAgentStepSequence(model)) {
-        appendTimelineStep(timeline, step);
+      const steps = buildAgentStepSequence(model);
+      const latestThoughtId = [...steps].reverse().find((step) => step.kind === "thought")?.id || "";
+      for (const step of steps) {
+        appendTimelineStep(timeline, step, step.id === latestThoughtId);
       }
       agentLoopEvents.appendChild(timeline);
     }
@@ -3084,14 +3283,15 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       capsule.append(dot, label);
       capsule.addEventListener("click", (event) => {
         event.stopPropagation();
-        renderAssistantTrace(assistantView);
+        renderAssistantTrace(assistantView, {defaultTab: "steps"});
       });
       assistantView.traceCapsule = capsule;
       assistantView.extras.appendChild(capsule);
     }
 
-    function renderAssistantTrace(assistantView) {
+    function renderAssistantTrace(assistantView, options = {}) {
       activeAssistantView = assistantView;
+      if (options.defaultTab) activeTraceTab = options.defaultTab;
       workspaceGrid.classList.add("has-trace");
       agentLoopPanel.hidden = false;
       agentLoopDetail.hidden = true;
@@ -3104,6 +3304,8 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     function bindAssistantDetail(assistantView, payload) {
       assistantView.completePayload = payload;
       const model = buildRunDetailsModel(assistantView);
+      assistantView.sourceIndexByUrl = model.sourceIndexByUrl;
+      if (assistantView.currentText) setMessageContent(assistantView, assistantView.currentText, model.sourceIndexByUrl);
       renderTraceCapsule(assistantView, model);
       renderAssistantSources(assistantView, model.sources);
       assistantView.node.classList.add("has-detail");
@@ -3252,6 +3454,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (isModeConfirmOpen()) return;
       const text = input.value.trim();
       if (!text) return;
       input.value = "";
@@ -3273,33 +3476,28 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
     modeButtons.forEach((button) => {
       button.addEventListener("click", async () => {
+        if (isModeConfirmOpen()) return;
         const nextMode = button.dataset.modeOption;
         if (!nextMode || nextMode === activeMode || currentAbortController) return;
-        const hasConversation = messages.children.length > 0 || Number(turnCount.textContent || "0") > 0;
-        if (hasConversation && !window.confirm("Switching modes starts a new chat. Continue?")) {
-          input.focus();
+        if (hasConversationState()) {
+          requestModeSwitch(nextMode);
           return;
         }
-        modeButtons.forEach((modeButton) => { modeButton.disabled = true; });
-        status.textContent = "Switching";
-        try {
-          const response = await fetch("/api/mode", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({mode: nextMode}),
-          });
-          const payload = await response.json();
-          if (!response.ok) throw new Error(payload.error || "Mode switch failed");
-          setActiveMode(payload.mode || nextMode);
-          clearConversationView();
-        } catch (error) {
-          status.textContent = "Error";
-          appendMessage("error", error.message || "Mode switch failed");
-        } finally {
-          modeButtons.forEach((modeButton) => { modeButton.disabled = false; });
-          input.focus();
-        }
+        await switchMode(nextMode);
       });
+    });
+
+    modeConfirmCancel?.addEventListener("click", cancelPendingModeSwitch);
+    modeConfirmConfirm?.addEventListener("click", confirmPendingModeSwitch);
+    modeConfirmBackdrop?.addEventListener("click", (event) => {
+      if (event.target === modeConfirmBackdrop) cancelPendingModeSwitch();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && modeConfirmBackdrop && !modeConfirmBackdrop.hidden) {
+        cancelPendingModeSwitch();
+        return;
+      }
+      trapModeConfirmFocus(event);
     });
 
     stopButton.addEventListener("click", async () => {

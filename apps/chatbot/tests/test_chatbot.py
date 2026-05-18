@@ -167,6 +167,20 @@ def test_build_system_prompt_uses_mode_specific_rules():
     assert "explicitly asks you to write, edit, save, create files, or run commands" in all_prompt
 
 
+def test_build_system_prompt_constrains_simple_web_search_loops():
+    chatbot_prompt = build_system_prompt("chatbot")
+    workspace_prompt = build_system_prompt("workspace")
+    all_prompt = build_system_prompt("all")
+
+    for prompt in (chatbot_prompt, workspace_prompt, all_prompt):
+        assert "For simple external factual queries" in prompt
+        assert "when web_search is appropriate" in prompt
+        assert "simple or current factual queries" not in prompt
+        assert "start with one targeted web_search" in prompt
+        assert "3-5 results" in prompt
+        assert "only search again" in prompt
+
+
 def test_build_system_prompt_appends_rules_to_custom_prompt():
     prompt = build_system_prompt("workspace", base_prompt="You are Calcifer.")
 
