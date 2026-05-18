@@ -546,6 +546,7 @@ class Agent:
         max_output_recovery_count = 0
         has_attempted_reactive_compact = False
         completion_deltas: list[int] = []
+        current_run_assistant_texts: list[str] = []
         current_max_tokens: int | None = None
 
         while turn_count < self._config.max_turns:
@@ -751,6 +752,8 @@ class Agent:
 
             has_attempted_reactive_compact = False
             conversation.append(assistant_msg)
+            if assistant_msg.content:
+                current_run_assistant_texts.append(assistant_msg.content)
 
             # Session persistence
             if self._session:
@@ -910,11 +913,7 @@ class Agent:
                 pass
 
         # Extract final text
-        final_text = ""
-        for msg in reversed(conversation):
-            if msg.role == "assistant" and msg.content:
-                final_text = msg.content
-                break
+        final_text = current_run_assistant_texts[-1] if current_run_assistant_texts else ""
 
         # End interaction span + record metrics
         end_interaction_span(

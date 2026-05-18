@@ -240,7 +240,7 @@ def test_index_html_contains_chat_surface():
     assert 'agentLoopDetail.scrollIntoView({block: "start", behavior: "auto"});' in html
     assert 'scrollTracePanelToTop();' in html
     assert 'anchorInspectorDetail();' in html
-    assert 'if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView);' in html
+    assert 'if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView, {defaultTab: "steps"});' in html
     assert 'if (activeAssistantView === assistantView) renderAssistantTrace(assistantView);' in html
     assert 'renderAssistantSources(assistantView, model.sources);' in html
     assert 'source.index = sources.length + 1;' in html
@@ -411,6 +411,74 @@ def test_index_html_rerenders_markdown_links_with_source_indices():
     assert "if (source?.index && !isCitationLikeLinkText(next.match[1]))" in html
 
 
+def test_index_html_treats_complete_reply_as_authoritative_for_current_run():
+    html = render_index_html()
+
+    assert "if (!payloadBelongsToAssistant(assistantView, payload)) return;" in html
+    assert "const finalReply = payload.reply || \"\";" in html
+    assert "if (finalReply) {" in html
+    assert "assistantText = finalReply;" in html
+    assert "setMessageContent(assistantView, assistantText);" in html
+
+
+def test_index_html_ignores_sse_payloads_from_other_runs():
+    html = render_index_html()
+
+    assert "function payloadBelongsToAssistant(assistantView, payload)" in html
+    assert (
+        'if (payload.type === "run_start" && payload.run_id && !assistantView.runId) '
+        "assistantView.runId = payload.run_id;"
+    ) in html
+    assert "if (payload.run_id && !assistantView.runId) return false;" in html
+    assert "return !payload.run_id || payload.run_id === assistantView.runId;" in html
+
+
+def test_payload_belongs_to_assistant_rejects_cross_run_payloads():
+    node = shutil.which("node")
+    if node is None:
+        raise AssertionError("node executable is required for run-id isolation check")
+
+    html = render_index_html()
+    script = html.split("<script>\n", 1)[1].split("\n  </script>", 1)[0]
+    match = re.search(r"    function payloadBelongsToAssistant\(", script)
+    assert match, "missing JS function payloadBelongsToAssistant"
+    next_match = re.search(r"\n\n    async function sendMessage\(", script[match.end() :])
+    assert next_match, "missing JS function boundary after payloadBelongsToAssistant"
+    function_source = script[match.start() : match.end() + next_match.start()]
+    node_script = f"""
+{function_source}
+const assistantView = {{runId: ""}};
+const earlyComplete = payloadBelongsToAssistant(assistantView, {{type: "complete", run_id: "run-1"}});
+const first = payloadBelongsToAssistant(assistantView, {{type: "run_start", run_id: "run-1"}});
+const matching = payloadBelongsToAssistant(assistantView, {{type: "complete", run_id: "run-1"}});
+const stale = payloadBelongsToAssistant(assistantView, {{type: "complete", run_id: "run-2"}});
+const legacy = payloadBelongsToAssistant(assistantView, {{type: "complete"}});
+process.stdout.write(JSON.stringify({{runId: assistantView.runId, earlyComplete, first, matching, stale, legacy}}));
+"""
+    result = subprocess.run(["node", "-e", node_script], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "runId": "run-1",
+        "earlyComplete": False,
+        "first": True,
+        "matching": True,
+        "stale": False,
+        "legacy": True,
+    }
+
+
+def test_index_html_blocks_submit_reset_and_mode_clicks_while_mode_switching():
+    html = render_index_html()
+
+    assert "let modeSwitchInFlight = false;" in html
+    assert "function isUiBusy()" in html
+    assert "return Boolean(currentAbortController || modeSwitchInFlight);" in html
+    assert "function setModeSwitching(nextValue)" in html
+    assert "modeSwitchInFlight = Boolean(nextValue);" in html
+    assert "if (isUiBusy()) return;" in html
+    assert "resetButton.disabled = modeSwitchInFlight;" in html
+
+
 def _extract_js_function(script: str, name: str, next_name: str) -> str:
     match = re.search(rf"    function {name}\(", script)
     assert match, f"missing JS function {name}"
@@ -475,6 +543,7 @@ def test_index_html_defaults_trace_capsule_to_steps_and_expands_thoughts():
     html = render_index_html()
 
     assert 'renderAssistantTrace(assistantView, {defaultTab: "steps"});' in html
+    assert 'if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView, {defaultTab: "steps"});' in html
     assert 'const latestThoughtId = [...steps].reverse().find((step) => step.kind === "thought")?.id || "";' in html
     assert 'appendTimelineStep(timeline, step, step.id === latestThoughtId);' in html
     assert 'meta: "LLM context and decision"' in html

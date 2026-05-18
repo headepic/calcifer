@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from calcifer import Agent, CalciferConfig
+from calcifer import Agent, CalciferConfig, tool
 from calcifer.testing import MockProvider
 
 from calcifer_chatbot import build_system_prompt as exported_build_system_prompt
@@ -59,6 +61,40 @@ async def test_chatbot_stream_updates_conversation():
     assert any(event.type == "text_delta" and event.text == "streamed answer" for event in events)
     assert bot.conversation[-1].role == "assistant"
     assert bot.conversation[-1].content == "streamed answer"
+
+
+@pytest.mark.asyncio
+async def test_chatbot_stream_complete_does_not_reuse_previous_turn_reply():
+    @tool(name="lookup", description="Look up fresh information")
+    def lookup(query: str) -> str:
+        return f"fresh result for {query}"
+
+    provider = MockProvider(
+        [
+            "previous Python answer",
+            {"tool_calls": [{"name": "lookup", "arguments": {"query": "Shanghai weather"}}]},
+            "",
+        ]
+    )
+    agent = Agent(
+        config=CalciferConfig(
+            api_key="mock",
+            base_url="mock",
+            model="mock",
+            system_prompt="You are a test chatbot.",
+        ),
+        tools=[lookup],
+        provider=provider,
+    )
+    bot = Chatbot(agent=agent)
+
+    first_events = [event async for event in bot.stream("Python latest stable?")]
+    second_events = [event async for event in bot.stream("Shanghai weather this week?")]
+
+    first_complete = [event for event in first_events if event.type == "run_complete"][-1]
+    second_complete = [event for event in second_events if event.type == "run_complete"][-1]
+    assert first_complete.result.final_text == "previous Python answer"
+    assert second_complete.result.final_text == ""
 
 
 def test_select_tools_default_chatbot_mode_uses_web_search_only():
@@ -148,6 +184,79 @@ def test_all_mode_exposes_mutating_tools_for_explicit_write_request():
     assert "file_write" in tool_names
     assert "file_edit" in tool_names
     assert "bash" in tool_names
+
+
+def test_chatbot_limits_web_search_per_request_and_resets_next_turn():
+    search_calls: list[str] = []
+
+    @tool(name="web_search", description="Search the web")
+    def web_search(query: str) -> str:
+        search_calls.append(query)
+        return f"result for {query}"
+
+    provider = MockProvider(
+        responses=[
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q1"}}]},
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q2"}}]},
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q3"}}]},
+            "first answer",
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q4"}}]},
+            "second answer",
+        ]
+    )
+    agent = Agent(
+        config=CalciferConfig(api_key="mock", base_url="mock", model="mock"),
+        tools=[web_search],
+        provider=provider,
+    )
+    bot = Chatbot(agent=agent, tool_mode="chatbot")
+
+    first = bot.ask_sync("search too much")
+    assert first.final_text == "first answer"
+    assert search_calls == ["q1", "q2"]
+    first_tool_results = [m.content for m in first.messages if m.role == "tool"]
+    assert first_tool_results[-1] is not None
+    limit_result = json.loads(first_tool_results[-1])
+    assert limit_result["type"] == "web_search_limit_reached"
+    assert limit_result["limit"] == 2
+    assert "answer from the web search results already available" in limit_result["message"].lower()
+
+    second = bot.ask_sync("new request may search again")
+    assert second.final_text == "second answer"
+    assert search_calls == ["q1", "q2", "q4"]
+
+
+@pytest.mark.parametrize("tool_mode", ["workspace", "all"])
+def test_workspace_and_all_limit_web_search_to_three_per_request(tool_mode):
+    search_calls: list[str] = []
+
+    @tool(name="web_search", description="Search the web")
+    def web_search(query: str) -> str:
+        search_calls.append(query)
+        return f"result for {query}"
+
+    provider = MockProvider(
+        responses=[
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q1"}}]},
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q2"}}]},
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q3"}}]},
+            {"tool_calls": [{"name": "web_search", "arguments": {"query": "q4"}}]},
+            "answer",
+        ]
+    )
+    agent = Agent(
+        config=CalciferConfig(api_key="mock", base_url="mock", model="mock"),
+        tools=[web_search],
+        provider=provider,
+    )
+    bot = Chatbot(agent=agent, tool_mode=tool_mode)
+
+    result = bot.ask_sync("search too much")
+
+    assert result.final_text == "answer"
+    assert search_calls == ["q1", "q2", "q3"]
+    limit_result = json.loads([m.content for m in result.messages if m.role == "tool"][-1])
+    assert limit_result["limit"] == 3
 
 
 def test_build_system_prompt_uses_mode_specific_rules():

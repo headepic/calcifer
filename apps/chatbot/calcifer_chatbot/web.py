@@ -1445,6 +1445,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     let selectedInspectorPayload = null;
     let activeTraceTab = "overview";
     let activeMode = "__TOOL_MODE__";
+    let modeSwitchInFlight = false;
     let pendingModeSwitch = "";
     let modeConfirmTrigger = null;
 
@@ -1477,6 +1478,17 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
 
     function hasConversationState() {
       return messages.children.length > 0 || Number(turnCount.textContent || "0") > 0;
+    }
+
+    function isUiBusy() {
+      return Boolean(currentAbortController || modeSwitchInFlight);
+    }
+
+    function setModeSwitching(nextValue) {
+      modeSwitchInFlight = Boolean(nextValue);
+      modeButtons.forEach((modeButton) => { modeButton.disabled = modeSwitchInFlight; });
+      resetButton.disabled = modeSwitchInFlight;
+      sendButton.disabled = modeSwitchInFlight || Boolean(currentAbortController);
     }
 
     function isModeConfirmOpen() {
@@ -1540,9 +1552,9 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     }
 
     async function switchMode(nextMode) {
-      if (!nextMode || nextMode === activeMode || currentAbortController) return;
+      if (!nextMode || nextMode === activeMode || isUiBusy()) return;
       closeModeConfirm({restoreFocus: false});
-      modeButtons.forEach((modeButton) => { modeButton.disabled = true; });
+      setModeSwitching(true);
       status.textContent = "Switching";
       try {
         const response = await fetch("/api/mode", {
@@ -1558,7 +1570,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
         status.textContent = "Error";
         appendMessage("error", error.message || "Mode switch failed");
       } finally {
-        modeButtons.forEach((modeButton) => { modeButton.disabled = false; });
+        setModeSwitching(false);
         input.focus();
       }
     }
@@ -3321,11 +3333,19 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       onPayload(JSON.parse(data));
     }
 
+    function payloadBelongsToAssistant(assistantView, payload) {
+      if (!assistantView || !payload) return false;
+      if (payload.type === "run_start" && payload.run_id && !assistantView.runId) assistantView.runId = payload.run_id;
+      if (payload.run_id && !assistantView.runId) return false;
+      return !payload.run_id || payload.run_id === assistantView.runId;
+    }
+
     async function sendMessage(text) {
       appendMessage("user", text);
       const assistantView = appendMessage("assistant", "");
       const assistantTrace = [{type: "input", label: "User input", detail: text}];
       assistantView.trace = assistantTrace;
+      assistantView.runId = "";
       assistantView.textStarted = false;
       assistantView.preserveActivityPath = false;
       assistantView.pathItems = new Map();
@@ -3337,9 +3357,10 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       stopButton.disabled = false;
       status.textContent = "Running";
       loopStatus.textContent = "Running";
-      if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView);
+      if (!agentLoopPanel.hidden) renderAssistantTrace(assistantView, {defaultTab: "steps"});
 
       function handlePayload(payload) {
+        if (!payloadBelongsToAssistant(assistantView, payload)) return;
         if (payload.type === "assistant_delta") {
           assistantText += payload.text || "";
           assistantView.textStarted = true;
@@ -3370,12 +3391,14 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
           return;
         }
         if (payload.type === "complete") {
-          if (!assistantText && payload.reply) {
-            assistantText = payload.reply;
+          const finalReply = payload.reply || "";
+          if (finalReply) {
+            assistantText = finalReply;
             assistantView.textStarted = true;
             clearAssistantPlaceholder(assistantView);
             setMessageContent(assistantView, assistantText);
-          } else if (!assistantText) {
+          } else {
+            assistantText = "";
             assistantView.textStarted = true;
             assistantView.preserveActivityPath = true;
             clearAssistantPlaceholder(assistantView);
@@ -3455,6 +3478,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       if (isModeConfirmOpen()) return;
+      if (isUiBusy()) return;
       const text = input.value.trim();
       if (!text) return;
       input.value = "";
@@ -3469,6 +3493,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
     });
 
     resetButton.addEventListener("click", async () => {
+      if (isUiBusy()) return;
       await fetch("/api/reset", {method: "POST"});
       clearConversationView();
       input.focus();
@@ -3478,7 +3503,7 @@ def render_index_html(*, tool_mode: ToolMode = "chatbot") -> str:
       button.addEventListener("click", async () => {
         if (isModeConfirmOpen()) return;
         const nextMode = button.dataset.modeOption;
-        if (!nextMode || nextMode === activeMode || currentAbortController) return;
+        if (!nextMode || nextMode === activeMode || isUiBusy()) return;
         if (hasConversationState()) {
           requestModeSwitch(nextMode);
           return;

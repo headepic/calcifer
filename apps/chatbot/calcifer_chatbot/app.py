@@ -6,14 +6,16 @@ delegates all model/tool behavior to `calcifer.Agent`.
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Iterator, Literal
+from typing import Any, AsyncIterator, Callable, Iterator, Literal
 
 from calcifer import Agent, AgentResult, CalciferConfig, Message, StreamEvent
 from calcifer.tool import Tool
 from calcifer.tool_registry import get_all_builtin_tools
+from calcifer.types.tools import ToolContext, ToolProgress, ToolResult
 
 
 DEFAULT_SYSTEM_PROMPT = "You are a concise, helpful chatbot powered by Calcifer."
@@ -23,6 +25,7 @@ ProviderMode = Literal["deepseek", "openai"]
 WEB_TOOL_NAMES = {"web_search"}
 WORKSPACE_TOOL_NAMES = {"file_read", "glob", "grep", "web_search"}
 MUTATING_TOOL_NAMES = {"bash", "file_write", "file_edit"}
+WEB_SEARCH_LIMITS: dict[ToolMode, int] = {"chatbot": 2, "workspace": 3, "all": 3}
 MUTATION_INTENT_MARKERS = (
     "write",
     "edit",
@@ -45,9 +48,11 @@ MUTATION_INTENT_MARKERS = (
 )
 WEB_SEARCH_LOOP_RULE = (
     "For simple external factual queries, when web_search is appropriate, start "
-    "with one targeted web_search using 3-5 results; only search again when the "
-    "first results are insufficient, conflict with each other, or the user asks "
-    "for deeper research."
+    "with one targeted web_search using 3-5 results, then answer from those "
+    "results. Do not issue multiple near-duplicate searches; only search again "
+    "when the first results are insufficient, conflict with each other, or the "
+    "user asks for deeper research. Answer the user's latest request; do not "
+    "repeat an earlier answer when current search results are available."
 )
 MODE_PROMPT_RULES: dict[str, str] = {
     "none": (
@@ -169,6 +174,97 @@ def infer_tool_mode(tools: list[Tool]) -> ToolMode:
     return "chatbot"
 
 
+class _RequestLimitedWebSearchTool(Tool):
+    """Per-request web_search limiter that preserves the wrapped tool schema."""
+
+    def __init__(self, wrapped: Tool, *, limit: int) -> None:
+        self._wrapped = wrapped
+        self._limit = limit
+        self._call_count = 0
+        self.name = wrapped.name
+        self.description = wrapped.description
+        self.parameters = wrapped.parameters
+        self.aliases = wrapped.aliases
+        self.is_concurrency_safe = wrapped.is_concurrency_safe
+        self.is_read_only = wrapped.is_read_only
+        self.is_destructive = wrapped.is_destructive
+        self.is_compactable = wrapped.is_compactable
+        self.max_result_size = wrapped.max_result_size
+        self.should_defer = wrapped.should_defer
+        self.always_load = wrapped.always_load
+        self.search_hint = wrapped.search_hint
+        self.is_mcp = wrapped.is_mcp
+        self.mcp_info = wrapped.mcp_info
+        self.strict = wrapped.strict
+
+    def __getattr__(self, name: str):
+        return getattr(self._wrapped, name)
+
+    async def call(
+        self,
+        args,
+        context: ToolContext,
+        on_progress: Callable[[ToolProgress], None] | None = None,
+    ) -> ToolResult:
+        if self._call_count >= self._limit:
+            payload = {
+                "type": "web_search_limit_reached",
+                "limit": self._limit,
+                "search_count": self._call_count,
+                "message": (
+                    "Search limit reached for this user request. Do not call "
+                    "web_search again. Answer from the web search results already "
+                    "available; if they are insufficient, say what information is missing."
+                ),
+            }
+            return ToolResult(
+                content=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                metadata={"limit_reached": True, "limit": self._limit},
+            )
+
+        self._call_count += 1
+        return await self._wrapped.call(args, context, on_progress=on_progress)
+
+    def to_openai_schema(self) -> dict:
+        return self._wrapped.to_openai_schema()
+
+    def validate_input(self, raw_args: dict):
+        return self._wrapped.validate_input(raw_args)
+
+    async def check_input(self, args: dict, context: ToolContext):
+        return await self._wrapped.check_input(args, context)
+
+    def backfill_observable_input(self, input: dict[str, Any]) -> dict[str, Any]:
+        return self._wrapped.backfill_observable_input(input)
+
+    def interrupt_behavior(self) -> str:
+        return self._wrapped.interrupt_behavior()
+
+    def is_enabled(self) -> bool:
+        return self._wrapped.is_enabled()
+
+    def get_path(self, args: dict[str, Any]) -> str | None:
+        return self._wrapped.get_path(args)
+
+    def is_search_or_read(self, args: dict[str, Any]) -> dict[str, bool]:
+        return self._wrapped.is_search_or_read(args)
+
+    def to_auto_classifier_input(self, args: dict[str, Any]) -> str:
+        return self._wrapped.to_auto_classifier_input(args)
+
+    def user_facing_name(self, args: dict[str, Any] | None = None) -> str:
+        return self._wrapped.user_facing_name(args)
+
+    def get_activity_description(self, args: dict[str, Any] | None = None) -> str | None:
+        return self._wrapped.get_activity_description(args)
+
+    def truncate_result(self, content: str) -> str:
+        return self._wrapped.truncate_result(content)
+
+    def matches_name(self, name: str) -> bool:
+        return self._wrapped.matches_name(name)
+
+
 @dataclass
 class Chatbot:
     """Stateful chatbot session around a Calcifer Agent."""
@@ -183,16 +279,25 @@ class Chatbot:
 
     @contextmanager
     def _request_tools(self, prompt: str) -> Iterator[None]:
-        """Temporarily hide mutating tools unless all-mode intent is explicit."""
-        if self.tool_mode != "all" or has_mutation_intent(prompt):
-            yield
-            return
-
+        """Apply request-scoped chatbot tool guards."""
         original_tools = self.agent._tools
         original_by_name = self.agent._tools_by_name
-        filtered_tools = [tool for tool in original_tools if tool.name not in MUTATING_TOOL_NAMES]
-        self.agent._tools = filtered_tools
-        self.agent._tools_by_name = {tool.name: tool for tool in filtered_tools}
+        request_tools = list(original_tools)
+
+        if self.tool_mode == "all" and not has_mutation_intent(prompt):
+            request_tools = [tool for tool in request_tools if tool.name not in MUTATING_TOOL_NAMES]
+
+        web_search_limit = WEB_SEARCH_LIMITS.get(self.tool_mode or "none")
+        if web_search_limit is not None:
+            request_tools = [
+                _RequestLimitedWebSearchTool(tool, limit=web_search_limit)
+                if tool.name == "web_search"
+                else tool
+                for tool in request_tools
+            ]
+
+        self.agent._tools = request_tools
+        self.agent._tools_by_name = {tool.name: tool for tool in request_tools}
         try:
             yield
         finally:
