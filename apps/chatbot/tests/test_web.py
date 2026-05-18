@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import threading
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -10,6 +11,7 @@ from http.server import ThreadingHTTPServer
 from calcifer import Agent, CalciferConfig, Message, StreamEvent, Usage
 from calcifer.testing import MockProvider
 
+import calcifer_chatbot.web as web_module
 from calcifer_chatbot.app import Chatbot
 from calcifer_chatbot.web import ChatbotWebApp, _handler_for, _stream_event_payload, render_index_html
 
@@ -331,6 +333,13 @@ def test_index_html_can_show_selected_tool_mode():
 
     assert '<span class="status-pill">workspace</span>' in html
     assert '<span class="status-pill">chatbot</span>' not in html
+
+
+def test_cli_tool_mode_choices_expose_chatbot_not_web():
+    source = inspect.getsource(web_module.main)
+
+    assert 'choices=["none", "chatbot", "workspace", "readonly", "all"]' in source
+    assert '"web"' not in source
 
 
 def test_web_app_chat_updates_conversation():

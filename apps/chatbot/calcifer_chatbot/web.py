@@ -3268,7 +3268,7 @@ def main() -> None:
     parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
     parser.add_argument(
         "--tools",
-        choices=["none", "chatbot", "web", "workspace", "readonly", "all"],
+        choices=["none", "chatbot", "workspace", "readonly", "all"],
         default="chatbot",
     )
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser window.")

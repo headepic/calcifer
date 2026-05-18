@@ -7,11 +7,13 @@ import pytest
 from calcifer import Agent, CalciferConfig
 from calcifer.testing import MockProvider
 
+from calcifer_chatbot import build_system_prompt as exported_build_system_prompt
 from calcifer_chatbot.app import (
     DEEPSEEK_BASE_URL,
     DEEPSEEK_DEFAULT_MODEL,
     Chatbot,
     build_chatbot,
+    build_system_prompt,
     resolve_provider_config,
     select_tools,
 )
@@ -73,10 +75,9 @@ def test_select_tools_chatbot_mode_uses_web_search_only():
     assert names == {"web_search"}
 
 
-def test_select_tools_web_mode_is_chatbot_alias():
-    assert {tool.name for tool in select_tools("web")} == {
-        tool.name for tool in select_tools("chatbot")
-    }
+def test_select_tools_rejects_removed_web_mode():
+    with pytest.raises(ValueError, match="Unknown tool mode"):
+        select_tools("web")  # type: ignore[arg-type]
 
 
 def test_select_tools_workspace_mode_excludes_mutating_tools():
@@ -101,6 +102,45 @@ def test_build_chatbot_default_chatbot_tools_are_web_search_only(monkeypatch):
     bot = build_chatbot(provider="deepseek")
 
     assert {tool.name for tool in bot.agent._tools} == {"web_search"}
+    assert "web_search" in bot.agent._config.system_prompt
+    assert "local workspace" not in bot.agent._config.system_prompt
+
+
+def test_build_chatbot_workspace_tools_use_workspace_prompt(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-test-key")
+
+    bot = build_chatbot(provider="deepseek", tools="workspace")
+
+    assert {tool.name for tool in bot.agent._tools} == {"file_read", "glob", "grep", "web_search"}
+    assert "local workspace" in bot.agent._config.system_prompt
+    assert "cite file paths" in bot.agent._config.system_prompt
+
+
+def test_build_system_prompt_uses_mode_specific_rules():
+    none_prompt = build_system_prompt("none")
+    chatbot_prompt = build_system_prompt("chatbot")
+    workspace_prompt = build_system_prompt("workspace")
+    all_prompt = build_system_prompt("all")
+
+    assert "Do not claim to have searched the web" in none_prompt
+    assert "web_search" in chatbot_prompt
+    assert "local workspace" not in chatbot_prompt
+    assert "local workspace" in workspace_prompt
+    assert "cite file paths" in workspace_prompt
+    assert "shell commands" in all_prompt
+    assert "file changes" in all_prompt
+
+
+def test_build_system_prompt_appends_rules_to_custom_prompt():
+    prompt = build_system_prompt("workspace", base_prompt="You are Calcifer.")
+
+    assert prompt.startswith("You are Calcifer.")
+    assert "local workspace" in prompt
+    assert "cite file paths" in prompt
+
+
+def test_package_exports_build_system_prompt():
+    assert exported_build_system_prompt("chatbot") == build_system_prompt("chatbot")
 
 
 def test_resolve_provider_config_uses_deepseek_env(monkeypatch):
